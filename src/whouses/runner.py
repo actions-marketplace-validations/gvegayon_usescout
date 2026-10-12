@@ -125,8 +125,11 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
         api = GitHubAPI(http, repo, token)
 
     # --- data branch checkout ------------------------------------------------
-    data_wt = git.worktree(scratch / "data", cfg.data_branch)
-    store = Store(data_wt)
+    same_branch = git.current_branch() == cfg.data_branch   # e.g. data_branch: main
+    sub = cfg.data_dir if cfg.data_dir is not None else (".whouses" if same_branch else "")
+    data_wt = git.worktree(scratch / "data", cfg.data_branch, detached=same_branch)
+    droot = data_wt / sub if sub else data_wt
+    store = Store(droot)
     state = store.state()
     state.setdefault("cache", {})
 
@@ -142,16 +145,16 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
             # re-read the merged content from the data branch (it now contains pending.jsonl)
             git.fetch(cfg.data_branch)
             if pr.get("merged"):
-                acc, rej = review.settle_merged(data_wt, store, proposed)
+                acc, rej = review.settle_merged(droot, store, proposed)
                 res.counts.update(review_accepted=acc, review_rejected=rej)
             else:
                 review.settle_closed(store, proposed, cfg.review.on_close, state, iso)
                 res.counts["review_closed"] = len(proposed)
-            review.clear_pending(data_wt)
+            review.clear_pending(droot)
             state.pop("review_pr", None)
             state["proposed"] = []
             pr_no = None
-    review.sync_backlog(data_wt, store)
+    review.sync_backlog(droot, store)
 
     # snoozed items are re-proposed after snooze_weeks
     snoozed = state.get("snoozed", {})
@@ -200,21 +203,21 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
                       llm_calls=clf.calls)
 
     # --- review branch / PR --------------------------------------------------
-    backlog_pending = (data_wt / "data/review/backlog.jsonl").is_file() and \
-        (data_wt / "data/review/backlog.jsonl").read_text().strip() != ""
+    bl = droot / "data/review/backlog.jsonl"
+    backlog_pending = bl.is_file() and bl.read_text().strip() != ""
     if routed.review or (backlog_pending and not pr_open):
         # commit the data branch first so the review branch is based on it
         git.commit_all(data_wt, f"whouses: update {cfg.name} ({iso})")
         git.push(data_wt, cfg.data_branch)
-        rev_wt = git.worktree(scratch / "review", cfg.review_branch, base=cfg.data_branch,
-                              reset=not pr_open)
+        data_sha = git.run("rev-parse", "HEAD", cwd=data_wt)
+        rev_wt = git.worktree(scratch / "review", cfg.review_branch, base=data_sha, reset=not pr_open)
         if not pr_open:  # fresh PR cycle: start from the current data branch
-            git.run("reset", "--hard", cfg.data_branch, cwd=rev_wt)
-        rstore = Store(rev_wt)
-        review.sync_backlog(rev_wt, rstore)
-        counts = review.build_review_files(rev_wt, routed.review, cfg.review, routed.spike)
+            git.run("reset", "--hard", data_sha, cwd=rev_wt)
+        rroot = rev_wt / sub if sub else rev_wt
+        review.sync_backlog(rroot, Store(rroot))
+        counts = review.build_review_files(rroot, routed.review, cfg.review, routed.spike)
         res.counts.update(pr_pending=counts["pending"], pr_backlog=counts["backlog"])
-        pend_ids = {f.id for f in review.read_jsonl(rev_wt / "data/review/pending.jsonl")}
+        pend_ids = {f.id for f in review.read_jsonl(rroot / "data/review/pending.jsonl")}
         state["proposed"] = sorted(set(state.get("proposed", [])) | pend_ids) if pr_open else sorted(pend_ids)
         body = _pr_body(cfg, counts, routed.spike)
         if git.commit_all(rev_wt, f"whouses: review candidates ({iso})") or not pr_open:
@@ -233,7 +236,7 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
     state["last_run"] = iso
     store.save_state(state)
     store.write_badge()
-    write_report(data_wt, cfg.name, list(store.findings().values()),
+    write_report(droot, cfg.name, list(store.findings().values()),
                  {f.id for f in routed.accept}, state.get("review_pr"))
     if git.commit_all(data_wt, f"whouses: update {cfg.name} ({iso})"):
         git.push(data_wt, cfg.data_branch)

@@ -35,10 +35,10 @@ def rows(work, branch, path):
     return [json.loads(x) for x in show(work, branch, path).splitlines() if x]
 
 
-def commits_by_bot_only(work, branch):
-    """Every commit the tool made on `branch` (everything after main) is authored AND committed by the bot."""
+def commits_by_bot_only(work, branch, since="origin/main"):
+    """Every commit the tool made on `branch` (everything after `since`) is authored AND committed by the bot."""
     git("fetch", "-q", "origin", cwd=work)
-    log = git("log", "--format=%an|%ae|%cn|%ce|%B%x00", f"origin/{branch}", "--not", "origin/main", cwd=work)
+    log = git("log", "--format=%an|%ae|%cn|%ce|%B%x00", f"origin/{branch}", "--not", since, cwd=work)
     entries = [e for e in log.split("\x00") if e.strip()]
     assert entries
     for e in entries:

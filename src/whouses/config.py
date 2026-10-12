@@ -46,6 +46,9 @@ class Config(BaseModel):
     review: ReviewCfg = Field(default_factory=ReviewCfg)
     llm: LLMCfg = Field(default_factory=LLMCfg)
     data_branch: str = "whouses-data"
+    # Folder (inside the data branch) holding data/, state.json, badge.json and REPORT.md. Default: the branch
+    # root for a dedicated branch, ".whouses" when the data branch is the branch the workflow checked out.
+    data_dir: str | None = None
     review_branch: str = "whouses/review"
 
     @property

@@ -210,7 +210,37 @@ def test_spike_sends_everything_to_review_even_if_confident(fake, tmp_path):
     batch["items"] = [cand(100 + i, SURE) for i in range(200)]   # e.g. a name collision
     r = run(cfg, work, scratch=tmp_path / "b", api=api, today=D)
     assert r.counts["spike"] and r.counts["accepted"] == 0
-    assert "name collision" in api.prs[1]["body"] or api.created == 1
+    assert api.created == 1 and "name collision" in api.prs[1]["body"]
+
+
+def test_data_in_main_branch_under_dot_whouses_with_pr_against_main(repo, tmp_path, monkeypatch):
+    """data_branch == the checked-out branch: data goes to .whouses/ on main, history is kept, PR targets main,
+    and a human pushing to main in the middle of the run does not break the bot's push."""
+    work, origin = repo
+    init = git("rev-parse", "HEAD", cwd=work)
+    batch = [cand(1, SURE)] + [cand(10 + i, PAPER, "paper") for i in range(3)]
+
+    def collect_while_human_pushes(ctx):
+        other = tmp_path / "other"
+        if not other.exists():
+            git("clone", "-q", str(origin), str(other), cwd=tmp_path)
+            (other / "human.txt").write_text("hi")
+            git("add", "-A", cwd=other)
+            git("-c", "user.name=Human", "-c", "user.email=h@example.org", "commit", "-q", "-m", "human work", cwd=other)
+            git("push", "-q", "origin", "HEAD:main", cwd=other)
+        return list(batch)
+    monkeypatch.setattr("whouses.runner.registry", lambda: {"fake": collect_while_human_pushes})
+    cfg = Config(profile="python", name="mypkg", repo="me/mypkg", sources=["fake"], data_branch="main")
+    api = FakeAPI()
+    r = run(cfg, work, api=api, today=D, scratch=tmp_path / "s")
+    assert r.counts["accepted"] == 1 and api.created == 1
+
+    assert len(rows(work, "main", ".whouses/data/findings.jsonl")) == 1
+    assert json.loads(show(work, "main", ".whouses/badge.json"))["message"].startswith("1 repos")
+    assert show(work, "main", "README.md") == "x" and show(work, "main", "human.txt") == "hi"   # nothing else touched
+    assert len(rows(work, "whouses/review", ".whouses/data/review/pending.jsonl")) == 3
+    log = git("log", "--format=%an", f"{init}..origin/main", cwd=work).splitlines()
+    assert sorted(set(log)) == ["Human", "github-actions[bot]"] and log.count("Human") == 1
 
 
 def test_a_failing_source_does_not_sink_the_run(fake, tmp_path, monkeypatch):

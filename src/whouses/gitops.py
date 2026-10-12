@@ -33,10 +33,20 @@ class Git:
         self.run("fetch", "origin", f"+refs/heads/{branch}:refs/remotes/origin/{branch}")
         return True
 
-    def worktree(self, path: Path, branch: str, base: str | None = None, reset: bool = False) -> Path:
-        """Create a worktree on `branch`: remote tip if present, else new branch off `base` (or orphan)."""
+    def current_branch(self) -> str:
+        return self.run("rev-parse", "--abbrev-ref", "HEAD", check=False)
+
+    def worktree(self, path: Path, branch: str, base: str | None = None, reset: bool = False,
+                 detached: bool = False) -> Path:
+        """Create a worktree on `branch`: remote tip if present, else new branch off `base` (or orphan).
+
+        `detached=True` is for a branch the main checkout already has checked out (e.g. main): the
+        worktree starts detached at the remote tip and is pushed with HEAD:refs/heads/<branch>.
+        """
         path = Path(path)
-        if self.fetch(branch) and not reset:
+        if detached and self.fetch(branch):
+            self.run("worktree", "add", "--detach", str(path), f"origin/{branch}")
+        elif self.fetch(branch) and not reset:
             self.run("worktree", "add", "-B", branch, str(path), f"origin/{branch}")
         elif base:
             self.run("worktree", "add", "-B", branch, str(path), base)
@@ -54,9 +64,18 @@ class Git:
         self.run("-c", "commit.gpgsign=false", "commit", "-q", "-m", msg, cwd=path)
         return True
 
-    def push(self, path: Path, branch: str, force: bool = False) -> None:
-        if self.push_enabled:
-            self.run("push", *(["--force"] if force else []), "origin", f"HEAD:refs/heads/{branch}", cwd=path)
+    def push(self, path: Path, branch: str, force: bool = False, attempts: int = 3) -> None:
+        """Push HEAD to `branch`. If someone else pushed meanwhile (busy main), rebase on it and retry."""
+        if not self.push_enabled:
+            return
+        for i in range(attempts):
+            try:
+                self.run("push", *(["--force"] if force else []), "origin", f"HEAD:refs/heads/{branch}", cwd=path)
+                return
+            except RuntimeError:
+                if force or i == attempts - 1 or not self.fetch(branch):
+                    raise
+                self.run("rebase", f"origin/{branch}", cwd=path)
 
 
 class GitHubAPI:

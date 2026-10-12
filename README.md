@@ -20,6 +20,15 @@ Find out who uses your research software, even when they don't cite it.
 
 The action uses the prebuilt image `ghcr.io/gvegayon/whouses:v1`, so nothing is built on your runner. Locally: `docker run --rm -v $PWD:/github/workspace -e GITHUB_WORKSPACE=/github/workspace ghcr.io/gvegayon/whouses:v1 dry-run --workspace /github/workspace` or `pipx install whouses`.
 
+## Where the data lives
+
+| `data_branch` | Where files go | Review PR targets |
+|---|---|---|
+| `whouses-data` (default) | root of that dedicated orphan branch | `whouses-data` |
+| the branch your workflow checks out (e.g. `main`) | `.whouses/` folder on that branch (`data_dir` to change it) | `main` |
+
+The default keeps weekly bot commits out of `main`, out of package tarballs (CRAN, PyPI, npm) and away from branch protection. Using `main` is simpler and puts everything in one place, but then: add `.whouses` to `.Rbuildignore`/`MANIFEST.in`/`.npmignore`, and allow `github-actions[bot]` to push to `main` (a protected `main` that requires PRs will reject the weekly update). If someone pushes to the branch mid-run, the bot rebases and retries.
+
 ## Who authors what
 
 Everything whouses writes is authored by **`github-actions[bot]`**: the database commits, the review-branch commits and the review PR. Commits carry no co-author trailers and are never signed with a personal key.
