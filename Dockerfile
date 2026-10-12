@@ -9,8 +9,8 @@ FROM python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=build /install /usr/local
-LABEL org.opencontainers.image.source="https://github.com/gvegayon/whouses" \
+LABEL org.opencontainers.image.source="https://github.com/gvegayon/usescout" \
       org.opencontainers.image.description="Track who uses your research software" \
       org.opencontainers.image.licenses="MIT"
-ENTRYPOINT ["whouses"]
+ENTRYPOINT ["usescout"]
 CMD ["action"]

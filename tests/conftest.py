@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from whouses.models import Finding
+from usescout.models import Finding
 
 
 def git(*a, cwd):

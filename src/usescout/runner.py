@@ -1,4 +1,4 @@
-"""One whouses run: settle the previous review PR, collect, classify, route, commit, open/update the PR."""
+"""One usescout run: settle the previous review PR, collect, classify, route, commit, open/update the PR."""
 from __future__ import annotations
 
 import tempfile
@@ -17,7 +17,7 @@ from .models import Candidate, Finding, evidence_hash
 from .report import write_report
 from .store import Store
 
-PR_TITLE = "whouses: uncertain findings to review"
+PR_TITLE = "usescout: uncertain findings to review"
 MAX_HISTORY = 12
 
 
@@ -122,7 +122,7 @@ def dedupe(findings: list[Finding]) -> list[Finding]:
 
 
 def run(cfg: Config, workspace: Path, **kw) -> Result:
-    scratch = Path(kw.pop("scratch", None) or tempfile.mkdtemp(prefix="whouses-"))
+    scratch = Path(kw.pop("scratch", None) or tempfile.mkdtemp(prefix="usescout-"))
     try:
         return _run(cfg, workspace, scratch=scratch, **kw)
     finally:
@@ -148,7 +148,7 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
 
     # --- data branch checkout ------------------------------------------------
     same_branch = git.current_branch() == cfg.data_branch   # e.g. data_branch: main
-    sub = cfg.data_dir if cfg.data_dir is not None else (".whouses" if same_branch else "")
+    sub = cfg.data_dir if cfg.data_dir is not None else (".usescout" if same_branch else "")
     data_wt = git.worktree(scratch / "data", cfg.data_branch, detached=same_branch)
     droot = data_wt / sub if sub else data_wt
     store = Store(droot)
@@ -229,7 +229,7 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
     backlog_pending = bl.is_file() and bl.read_text().strip() != ""
     if routed.review or (backlog_pending and not pr_open):
         # commit the data branch first so the review branch is based on it
-        git.commit_all(data_wt, f"whouses: update {cfg.name} ({iso})")
+        git.commit_all(data_wt, f"usescout: update {cfg.name} ({iso})")
         git.push(data_wt, cfg.data_branch)
         data_sha = git.run("rev-parse", "HEAD", cwd=data_wt)
         rev_wt = git.worktree(scratch / "review", cfg.review_branch, base=data_sha, reset=not pr_open)
@@ -243,14 +243,14 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
         pend_ids = {f.id for f in review.read_jsonl(rroot / "data/review/pending.jsonl")}
         state["proposed"] = sorted(set(state.get("proposed", [])) | pend_ids) if pr_open else sorted(pend_ids)
         body = _pr_body(cfg, counts, routed.spike)
-        if git.commit_all(rev_wt, f"whouses: review candidates ({iso})") or not pr_open:
+        if git.commit_all(rev_wt, f"usescout: review candidates ({iso})") or not pr_open:
             git.push(rev_wt, cfg.review_branch, force=not pr_open)
         if api:
             if pr_open:
                 api.update_pr(pr_no, PR_TITLE, body)
             else:
                 state["review_pr"] = api.create_pr(cfg.review_branch, cfg.data_branch, PR_TITLE, body,
-                                                   ["whouses-review"])
+                                                   ["usescout-review"])
                 res.counts["pr_opened"] = state["review_pr"]
         # the review-state fields live on the data branch, so re-write state there
     if routed.accept or routed.review:  # only record runs that found something, so no-op runs don't churn
@@ -261,14 +261,14 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
     store.write_badge()
     write_report(droot, cfg.name, list(store.findings().values()),
                  {f.id for f in routed.accept}, state.get("review_pr"))
-    if git.commit_all(data_wt, f"whouses: update {cfg.name} ({iso})"):
+    if git.commit_all(data_wt, f"usescout: update {cfg.name} ({iso})"):
         git.push(data_wt, cfg.data_branch)
         res.counts["committed"] = git.push_enabled   # a dry run commits locally but pushes nothing
     return res
 
 
 def _pr_body(cfg: Config, counts: dict, spike: bool) -> str:
-    lines = [f"whouses found candidates for **{cfg.name}** that it is not sure about.", "",
+    lines = [f"usescout found candidates for **{cfg.name}** that it is not sure about.", "",
              f"- Items in this PR: **{counts['pending']}** (max {cfg.review.max_items_per_pr})",
              f"- Queued for later PRs: **{counts['backlog']}** (`data/review/backlog.csv`)", "",
              "Open `data/review/REVIEW.md` to read them. **Delete a line from "

@@ -14,7 +14,7 @@ PLACEHOLDERS = ("name", "import_name", "Name")
 
 
 def _builtin_dir():
-    return resources.files("whouses.profiles")
+    return resources.files("usescout.profiles")
 
 
 def schema() -> dict:

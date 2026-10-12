@@ -6,7 +6,7 @@ from ..models import Candidate
 from . import Context
 
 API = "https://api.openalex.org/works"
-MAILTO = "whouses@users.noreply.github.com"
+MAILTO = "usescout@users.noreply.github.com"
 MAX_PAGES = 5
 
 

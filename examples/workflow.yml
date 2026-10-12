@@ -1,17 +1,17 @@
-# Save as .github/workflows/whouses.yml in the repo of the package you want to track.
-name: whouses
+# Save as .github/workflows/usescout.yml in the repo of the package you want to track.
+name: usescout
 on:
   schedule: [{ cron: "0 6 * * 1" }]   # every Monday
   workflow_dispatch: {}
 permissions: { contents: write, pull-requests: write }
-concurrency: whouses                   # never run two at once (the review branch is shared)
+concurrency: usescout                   # never run two at once (the review branch is shared)
 jobs:
-  whouses:
+  usescout:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: gvegayon/whouses@v0
+      - uses: gvegayon/usescout@v0
         with:
-          search-token: ${{ secrets.WHOUSES_SEARCH_PAT }}   # optional; used only for code search, PRs stay bot-authored
+          search-token: ${{ secrets.USESCOUT_SEARCH_PAT }}   # optional; used only for code search, PRs stay bot-authored
           llm-provider: anthropic                                    # none | anthropic | openai | gemini | ollama
           llm-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

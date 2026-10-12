@@ -5,7 +5,7 @@ import time
 
 import httpx
 
-UA = "whouses/0.1 (+https://github.com/gvegayon/whouses)"
+UA = "usescout/0.1 (+https://github.com/gvegayon/usescout)"
 
 
 class Http:

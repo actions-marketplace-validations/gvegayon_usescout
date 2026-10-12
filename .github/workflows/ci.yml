@@ -10,10 +10,10 @@ jobs:
       - run: pip install -e '.[dev]'
       - run: ruff check .
       - run: pytest -q
-      - run: for p in $(whouses profile list); do whouses profile show $p --name demo > /dev/null; done
+      - run: for p in $(usescout profile list); do usescout profile show $p --name demo > /dev/null; done
   docker:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t whouses:ci .
-      - run: docker run --rm whouses:ci profile list
+      - run: docker build -t usescout:ci .
+      - run: docker run --rm usescout:ci profile list

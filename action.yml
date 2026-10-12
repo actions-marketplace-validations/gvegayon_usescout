@@ -1,13 +1,13 @@
-name: whouses
-description: Track who uses your research software across code hosts, registries and the literature.
+name: usescout
+description: Find where your research software is used (code hosts, registries, papers) and whether the users cite it.
 author: George G. Vega Yon
 branding:
   icon: search
   color: blue
 inputs:
   config:
-    description: Path to the whouses config in the repo.
-    default: .whouses.yml
+    description: Path to the usescout config in the repo.
+    default: .usescout.yml
   github-token:
     description: Token used to open and update the review PR. Keep the default so the PR is authored by github-actions[bot].
     default: ${{ github.token }}
@@ -15,8 +15,8 @@ inputs:
     description: Optional token used ONLY for GitHub code search (a PAT may be needed). Never used to commit or open PRs.
     default: ""
   llm-provider:
-    description: none | anthropic | openai | gemini | ollama
-    default: none
+    description: none | anthropic | openai | gemini | ollama. Leave empty to use the config file (default there is none).
+    default: ""
   llm-model:
     description: Model name; provider default when empty.
     default: ""
@@ -27,12 +27,12 @@ inputs:
     description: Base URL of an Ollama server (e.g. http://localhost:11434).
     default: ""
   data-branch:
-    description: Branch that stores the database.
-    default: whouses-data
+    description: Branch that stores the database. Leave empty to use `data_branch` from the config file (default usescout).
+    default: ""
   dry-run:
     description: "true = collect and report counts, but push nothing."
     default: "false"
 runs:
   using: docker
-  image: docker://ghcr.io/gvegayon/whouses:v0.1.4
+  image: docker://ghcr.io/gvegayon/usescout:v0.2.0
   args: [action]

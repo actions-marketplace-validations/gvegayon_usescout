@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from whouses import profile
+from usescout import profile
 
 # profile -> (name, snippets that must match a usage pattern, snippets that must not)
 CASES = {

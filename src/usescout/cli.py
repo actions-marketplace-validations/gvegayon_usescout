@@ -1,4 +1,4 @@
-"""Command line: whouses run | dry-run | validate-config | profile show <id>."""
+"""Command line: usescout run | dry-run | validate-config | profile show <id>."""
 from __future__ import annotations
 
 import argparse
@@ -14,19 +14,30 @@ from .config import load
 
 
 def _cfg(args):
-    cfg = load(args.config)
-    key = os.environ.get("WHOUSES_LLM_API_KEY", "")
-    prov = os.environ.get("WHOUSES_LLM_PROVIDER")
+    cfg = load(find_config(Path(args.workspace), args.config))
+    key = os.environ.get("USESCOUT_LLM_API_KEY", "")
+    prov = os.environ.get("USESCOUT_LLM_PROVIDER")
     if prov:
         cfg.llm.provider = prov
     if key:
         cfg.llm.api_key = key
-    for env, attr in (("WHOUSES_LLM_MODEL", "model"), ("WHOUSES_OLLAMA_URL", "url")):
+    for env, attr in (("USESCOUT_LLM_MODEL", "model"), ("USESCOUT_OLLAMA_URL", "url")):
         if os.environ.get(env):
             setattr(cfg.llm, attr, os.environ[env])
     if not cfg.repo and os.environ.get("GITHUB_REPOSITORY"):
         cfg.repo = os.environ["GITHUB_REPOSITORY"]
     return cfg
+
+
+LEGACY_CONFIG = ".whouses.yml"   # the tool's previous name; still read if no .usescout.yml exists
+
+
+def find_config(base: Path, name: str) -> Path:
+    p = base / name
+    if not p.is_file() and name == ".usescout.yml" and (base / LEGACY_CONFIG).is_file():
+        print(f"::warning::{LEGACY_CONFIG} is the old name of the config file; rename it to .usescout.yml")
+        return base / LEGACY_CONFIG
+    return p
 
 
 def _input(name: str, default: str = "") -> str:
@@ -41,7 +52,7 @@ def _action() -> int:
 
     ws = Path(os.environ.get("GITHUB_WORKSPACE", "."))
     subprocess.run(["git", "config", "--global", "--add", "safe.directory", "*"], check=False)
-    cfg = load(ws / (_input("config") or ".whouses.yml"))
+    cfg = load(find_config(ws, _input("config") or ".usescout.yml"))
     if not cfg.repo:
         cfg.repo = os.environ.get("GITHUB_REPOSITORY", "")
     if _input("llm-provider"):
@@ -59,17 +70,17 @@ def _action() -> int:
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         rows = "\n".join(f"| {k} | {v} |" for k, v in sorted(res.counts.items()))
-        Path(summary).write_text(f"### whouses{' (dry run)' if dry else ''}\n\n| metric | value |\n|---|---|\n{rows}\n")
+        Path(summary).write_text(f"### usescout{' (dry run)' if dry else ''}\n\n| metric | value |\n|---|---|\n{rows}\n")
     print(json.dumps(res.counts, indent=1, default=str))
     return 0
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(prog="whouses")
+    ap = argparse.ArgumentParser(prog="usescout")
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("run", "dry-run", "validate-config"):
         p = sub.add_parser(name)
-        p.add_argument("--config", default=".whouses.yml")
+        p.add_argument("--config", default=".usescout.yml")
         p.add_argument("--workspace", default=os.environ.get("GITHUB_WORKSPACE", "."))
     act = sub.add_parser("action", help="entrypoint for the GitHub Action (reads INPUT_* env vars)")
     act.add_argument("--config", default=None)
@@ -100,7 +111,7 @@ def main(argv=None) -> int:
     from .runner import run
 
     token = os.environ.get("GITHUB_TOKEN", "")
-    res = run(cfg, ws, token=token, search_token=os.environ.get("WHOUSES_SEARCH_TOKEN", ""),
+    res = run(cfg, ws, token=token, search_token=os.environ.get("USESCOUT_SEARCH_TOKEN", ""),
               push=args.cmd == "run")
     print(json.dumps(res.counts, indent=1, default=str))
     for w in res.warnings:

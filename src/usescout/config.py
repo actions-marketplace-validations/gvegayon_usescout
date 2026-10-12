@@ -1,4 +1,4 @@
-"""User configuration (.whouses.yml)."""
+"""User configuration (.usescout.yml)."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -42,15 +42,15 @@ class Config(BaseModel):
     exclude_owners: list[str] = Field(default_factory=list)
     sources: list[str] = Field(default_factory=lambda: ["github", "ecosystems", "openalex", "europepmc"])
     overrides: dict = Field(default_factory=dict)
-    profiles_dir: str = ".whouses/profiles"
+    profiles_dir: str = ".usescout/profiles"
     review: ReviewCfg = Field(default_factory=ReviewCfg)
     llm: LLMCfg = Field(default_factory=LLMCfg)
     max_evidence_fetches: int = 60   # open-access full texts fetched per run to excerpt where a paper mentions the package
-    data_branch: str = "whouses-data"
+    data_branch: str = "usescout"
     # Folder (inside the data branch) holding data/, state.json, badge.json and REPORT.md. Default: the branch
-    # root for a dedicated branch, ".whouses" when the data branch is the branch the workflow checked out.
+    # root for a dedicated branch, ".usescout" when the data branch is the branch the workflow checked out.
     data_dir: str | None = None
-    review_branch: str = "whouses/review"
+    review_branch: str = "usescout-review"
 
     @property
     def profile_ids(self) -> list[str]:

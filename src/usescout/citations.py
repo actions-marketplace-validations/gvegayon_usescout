@@ -4,7 +4,7 @@ from __future__ import annotations
 from .http import Http
 
 OA = "https://api.openalex.org/works"
-MAILTO = "whouses@users.noreply.github.com"
+MAILTO = "usescout@users.noreply.github.com"
 
 
 def target_ids(http: Http, dois: list[str]) -> set[str]:

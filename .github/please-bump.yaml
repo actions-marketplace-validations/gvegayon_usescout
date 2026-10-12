@@ -8,7 +8,7 @@ waiver:
   marker: true
 
 groups:
-  whouses:
+  usescout:
     # only changes that alter what ships need a bump; docs, tests and CI do not
     paths: |
       src/
@@ -20,8 +20,8 @@ groups:
       - preset: python-pyproject
         files: [pyproject.toml]
       - preset: python-dunder
-        files: [src/whouses/__init__.py]
+        files: [src/usescout/__init__.py]
       - scheme: pep440            # the image action.yml runs must be the one released for this version
         files: [action.yml]
         parts:
-          version: '^[[:space:]]*image:[[:space:]]*docker://ghcr\.io/gvegayon/whouses:v([0-9][^[:space:]]*)[[:space:]]*$'
+          version: '^[[:space:]]*image:[[:space:]]*docker://ghcr\.io/gvegayon/usescout:v([0-9][^[:space:]]*)[[:space:]]*$'

@@ -10,10 +10,10 @@ import pytest
 import respx
 
 from conftest import commits_by_bot_only, git, rows, show
-from whouses import collectors
-from whouses.config import Config
-from whouses.models import Candidate
-from whouses.runner import run
+from usescout import collectors
+from usescout.config import Config
+from usescout.models import Candidate
+from usescout.runner import run
 
 D = date(2026, 3, 2)
 
@@ -51,7 +51,7 @@ def fake(repo, monkeypatch):
     """Run the real runner with a scripted collector."""
     work, _ = repo
     batch = {"items": []}
-    monkeypatch.setattr("whouses.runner.registry", lambda: {"fake": lambda ctx: list(batch["items"])})
+    monkeypatch.setattr("usescout.runner.registry", lambda: {"fake": lambda ctx: list(batch["items"])})
     cfg = Config(profile="python", name="mypkg", repo="me/mypkg", sources=["fake"])
     return work, batch, cfg
 
@@ -138,7 +138,7 @@ def test_all_sources_pipeline_with_llm_and_bot_only_commits(repo, tmp_path):
     res = run(cfg, work, token="bot-token", search_token="pat", api=api, today=D, scratch=tmp_path / "s")
     assert not res.warnings, res.warnings
 
-    f = {r["url"]: r for r in rows(work, "whouses-data", "data/findings.jsonl")}
+    f = {r["url"]: r for r in rows(work, "usescout", "data/findings.jsonl")}
     assert f["https://github.com/a/one"]["usage_class"] == "uses"
     assert f["https://pypi.org/project/dep1"]["usage_class"] == "depends"
     assert "https://github.com/b/fork" not in f and "https://github.com/me/mypkg" not in f
@@ -165,18 +165,18 @@ def test_all_sources_pipeline_with_llm_and_bot_only_commits(repo, tmp_path):
     assert "ecosyste.ms" in f["https://pypi.org/project/dep1"]["where"]
     assert res.counts["excerpts_fetched"] == 3                              # 10.2/a, 10.3/b (found) and 10.4/c (no open full text)
     assert "https://doi.org/10.4/c" not in f                                # weak signal, no excerpt: goes to review, not the database
-    pend = {r["url"]: r for r in rows(work, "whouses/review", "data/review/pending.jsonl")}
+    pend = {r["url"]: r for r in rows(work, "usescout-review", "data/review/pending.jsonl")}
     assert "no open-access full text found" in pend["https://doi.org/10.4/c"]["where"]
     assert pend["https://doi.org/10.4/c"]["snippet"] == ""
-    assert "_No excerpt available" in show(work, "whouses/review", "data/review/REVIEW.md")
-    papers_csv = show(work, "whouses-data", "data/papers.csv")
+    assert "_No excerpt available" in show(work, "usescout-review", "data/review/REVIEW.md")
+    papers_csv = show(work, "usescout", "data/papers.csv")
     assert "Methods" in papers_csv and "evidence_url" in papers_csv.splitlines()[0]
-    assert "Methods" in show(work, "whouses-data", "REPORT.md") and "mypkg" in show(work, "whouses-data", "REPORT.md")
-    assert "Uses us quietly" in show(work, "whouses-data", "REPORT.md")      # used without citing
-    assert json.loads(show(work, "whouses-data", "badge.json"))["message"] == "2 repos · 3 papers"
+    assert "Methods" in show(work, "usescout", "REPORT.md") and "mypkg" in show(work, "usescout", "REPORT.md")
+    assert "Uses us quietly" in show(work, "usescout", "REPORT.md")      # used without citing
+    assert json.loads(show(work, "usescout", "badge.json"))["message"] == "2 repos · 3 papers"
     assert api.created == 1 and res.counts["llm_calls"] == 3   # the excerpt made 10.3/b judgeable
 
-    assert commits_by_bot_only(work, "whouses-data") >= 1
+    assert commits_by_bot_only(work, "usescout") >= 1
 
 
 # --------------------------------------------------------------------------------------------
@@ -187,35 +187,35 @@ def test_review_pr_lifecycle_merge_with_admin_edit(fake, tmp_path):
     batch["items"] = [cand(1, SURE), cand(2, UNSURE)] + [cand(10 + i, PAPER, "paper") for i in range(5)]
     r1 = run(cfg, work, scratch=tmp_path / "s1", **kw)
     assert (r1.counts["accepted"], r1.counts["to_review"], r1.counts["pr_opened"]) == (1, 5, 1)
-    assert len(rows(work, "whouses-data", "data/findings.jsonl")) == 1
-    assert len(rows(work, "whouses/review", "data/review/pending.jsonl")) == 5
-    md = show(work, "whouses/review", "data/review/REVIEW.md")
+    assert len(rows(work, "usescout", "data/findings.jsonl")) == 1
+    assert len(rows(work, "usescout-review", "data/review/pending.jsonl")) == 5
+    md = show(work, "usescout-review", "data/review/REVIEW.md")
     assert "**Found in:** abstract" in md and "> We used **mypkg**, a Python library" in md
 
     # PR still open: a new uncertain item is appended to the SAME PR
     batch["items"].append(cand(99, PAPER, "paper"))
     r2 = run(cfg, work, scratch=tmp_path / "s2", **kw)
     assert api.created == 1 and "pr_opened" not in r2.counts
-    assert len(rows(work, "whouses/review", "data/review/pending.jsonl")) == 6
+    assert len(rows(work, "usescout-review", "data/review/pending.jsonl")) == 6
 
     # admin deletes one line on the review branch, then merges the PR
-    git("checkout", "-q", "-B", "tmp-review", "origin/whouses/review", cwd=work)
+    git("checkout", "-q", "-B", "tmp-review", "origin/usescout-review", cwd=work)
     p = work / "data/review/pending.jsonl"
     lines = p.read_text().splitlines()
     removed = json.loads(lines[0])["id"]
     p.write_text("\n".join(lines[1:]) + "\n")
     git("add", "-A", cwd=work)
     git("commit", "-q", "-m", "admin edit", cwd=work)
-    git("checkout", "-q", "-B", "tmp-data", "origin/whouses-data", cwd=work)
+    git("checkout", "-q", "-B", "tmp-data", "origin/usescout", cwd=work)
     git("merge", "-q", "--no-edit", "tmp-review", cwd=work)
-    git("push", "-q", "origin", "HEAD:whouses-data", cwd=work)
+    git("push", "-q", "origin", "HEAD:usescout", cwd=work)
     git("checkout", "-q", "main", cwd=work)
     api.prs[1].update(state="closed", merged=True)
 
     r3 = run(cfg, work, scratch=tmp_path / "s3", **kw)
     assert r3.counts["review_accepted"] == 5
-    acc = {r["id"] for r in rows(work, "whouses-data", "data/findings.jsonl")}
-    rej = {r["id"] for r in rows(work, "whouses-data", "data/rejected.jsonl")}
+    acc = {r["id"] for r in rows(work, "usescout", "data/findings.jsonl")}
+    rej = {r["id"] for r in rows(work, "usescout", "data/rejected.jsonl")}
     assert removed in rej and removed not in acc and len(acc) == 6
     assert api.created == 1 and r3.counts["to_review"] == 0   # rejected items never come back
 
@@ -228,12 +228,12 @@ def test_closed_pr_rejects_and_unchanged_run_makes_no_commit(fake, tmp_path):
     run(cfg, work, scratch=tmp_path / "a", **kw)
     api.prs[1]["state"] = "closed"  # closed without merging
     run(cfg, work, scratch=tmp_path / "b", **kw)
-    assert len(rows(work, "whouses-data", "data/rejected.jsonl")) == 3 and api.created == 1
-    head = git("rev-parse", "origin/whouses-data", cwd=work)
+    assert len(rows(work, "usescout", "data/rejected.jsonl")) == 3 and api.created == 1
+    head = git("rev-parse", "origin/usescout", cwd=work)
     batch["items"][0].snippet = SURE + "\n# search returned the fragments in another order"   # same verdict
     run(cfg, work, scratch=tmp_path / "c", **kw)
     git("fetch", "-q", "origin", cwd=work)
-    assert git("rev-parse", "origin/whouses-data", cwd=work) == head
+    assert git("rev-parse", "origin/usescout", cwd=work) == head
 
 
 def test_flood_is_capped_at_100_with_backlog_then_promoted(fake, tmp_path):
@@ -242,13 +242,13 @@ def test_flood_is_capped_at_100_with_backlog_then_promoted(fake, tmp_path):
     batch["items"] = [cand(i, PAPER, "paper") for i in range(250)]
     r = run(cfg, work, scratch=tmp_path / "f", api=api, today=D)
     assert (r.counts["pr_pending"], r.counts["pr_backlog"]) == (100, 150)
-    csv = show(work, "whouses/review", "data/review/backlog.csv").splitlines()
+    csv = show(work, "usescout-review", "data/review/backlog.csv").splitlines()
     assert len(csv) == 151 and csv[0].startswith("id,kind,title,url")
-    assert commits_by_bot_only(work, "whouses/review") >= 1
+    assert commits_by_bot_only(work, "usescout-review") >= 1
     # merge the PR as-is; the next cycle opens a new PR with the next 100 from the backlog
-    git("checkout", "-q", "-B", "tmp-data", "origin/whouses-data", cwd=work)
-    git("merge", "-q", "--no-edit", "origin/whouses/review", cwd=work)
-    git("push", "-q", "origin", "HEAD:whouses-data", cwd=work)
+    git("checkout", "-q", "-B", "tmp-data", "origin/usescout", cwd=work)
+    git("merge", "-q", "--no-edit", "origin/usescout-review", cwd=work)
+    git("push", "-q", "origin", "HEAD:usescout", cwd=work)
     git("checkout", "-q", "main", cwd=work)
     api.prs[1].update(state="closed", merged=True)
     r2 = run(cfg, work, scratch=tmp_path / "g", api=api, today=D)
@@ -263,14 +263,14 @@ def test_spike_sends_everything_to_review_even_if_confident(fake, tmp_path):
     batch["items"] = [cand(100 + i, SURE) for i in range(200)]   # e.g. a name collision
     r = run(cfg, work, scratch=tmp_path / "b", api=api, today=D)
     assert r.counts["spike"] and r.counts["accepted"] == 0
-    md = show(work, "whouses/review", "data/review/REVIEW.md")      # repos: file, link and the matching code in a fence
+    md = show(work, "usescout-review", "data/review/REVIEW.md")      # repos: file, link and the matching code in a fence
     assert "**Found in:** x.py ([open](https://github.com/o/r100/blob/abc/x.py))" in md
     assert "```\nimport mypkg\nmypkg.go()\n```" in md
     assert api.created == 1 and "name collision" in api.prs[1]["body"]
 
 
-def test_data_in_main_branch_under_dot_whouses_with_pr_against_main(repo, tmp_path, monkeypatch):
-    """data_branch == the checked-out branch: data goes to .whouses/ on main, history is kept, PR targets main,
+def test_data_in_main_branch_under_dot_usescout_with_pr_against_main(repo, tmp_path, monkeypatch):
+    """data_branch == the checked-out branch: data goes to .usescout/ on main, history is kept, PR targets main,
     and a human pushing to main in the middle of the run does not break the bot's push."""
     work, origin = repo
     init = git("rev-parse", "HEAD", cwd=work)
@@ -285,16 +285,16 @@ def test_data_in_main_branch_under_dot_whouses_with_pr_against_main(repo, tmp_pa
             git("-c", "user.name=Human", "-c", "user.email=h@example.org", "commit", "-q", "-m", "human work", cwd=other)
             git("push", "-q", "origin", "HEAD:main", cwd=other)
         return list(batch)
-    monkeypatch.setattr("whouses.runner.registry", lambda: {"fake": collect_while_human_pushes})
+    monkeypatch.setattr("usescout.runner.registry", lambda: {"fake": collect_while_human_pushes})
     cfg = Config(profile="python", name="mypkg", repo="me/mypkg", sources=["fake"], data_branch="main")
     api = FakeAPI()
     r = run(cfg, work, api=api, today=D, scratch=tmp_path / "s")
     assert r.counts["accepted"] == 1 and api.created == 1
 
-    assert len(rows(work, "main", ".whouses/data/findings.jsonl")) == 1
-    assert json.loads(show(work, "main", ".whouses/badge.json"))["message"].startswith("1 repos")
+    assert len(rows(work, "main", ".usescout/data/findings.jsonl")) == 1
+    assert json.loads(show(work, "main", ".usescout/badge.json"))["message"].startswith("1 repos")
     assert show(work, "main", "README.md") == "x" and show(work, "main", "human.txt") == "hi"   # nothing else touched
-    assert len(rows(work, "whouses/review", ".whouses/data/review/pending.jsonl")) == 3
+    assert len(rows(work, "usescout-review", ".usescout/data/review/pending.jsonl")) == 3
     log = git("log", "--format=%an", f"{init}..origin/main", cwd=work).splitlines()
     assert sorted(set(log)) == ["Human", "github-actions[bot]"] and log.count("Human") == 1
 
@@ -304,10 +304,47 @@ def test_a_failing_source_does_not_sink_the_run(fake, tmp_path, monkeypatch):
 
     def boom(ctx):
         raise RuntimeError("down")
-    monkeypatch.setattr("whouses.runner.registry", lambda: {"fake": boom})
+    monkeypatch.setattr("usescout.runner.registry", lambda: {"fake": boom})
     res = run(cfg, work, scratch=tmp_path / "x", api=FakeAPI(), today=D)
     assert any("down" in w for w in res.warnings)
 
 
 def test_registry_lists_real_sources():
     assert set(collectors.registry()) == {"github", "ecosystems", "openalex", "europepmc"}
+
+
+def test_action_entrypoint_config_branch_wins_unless_input_is_set(repo, tmp_path, monkeypatch):
+    """Regression: action.yml used to default `data-branch`, which silently overrode `data_branch` in the config."""
+    import yaml
+
+    from usescout import cli
+
+    inputs = yaml.safe_load(open("action.yml"))["inputs"]
+    assert inputs["data-branch"]["default"] == "" and inputs["llm-provider"]["default"] == ""   # defaults must not override
+
+    work, origin = repo
+    monkeypatch.setattr("usescout.runner.registry", lambda: {"fake": lambda ctx: [cand(1, SURE)]})
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(tmp_path / "gitconfig"))      # the entrypoint edits global git config
+    env = {"GITHUB_WORKSPACE": str(work), "GITHUB_REPOSITORY": "me/mypkg", "INPUT_CONFIG": ".usescout.yml",
+           "INPUT_DRY-RUN": "false", "INPUT_GITHUB-TOKEN": "t", "INPUT_SEARCH-TOKEN": "", "INPUT_LLM-PROVIDER": "",
+           "INPUT_LLM-MODEL": "", "INPUT_LLM-API-KEY": "", "INPUT_OLLAMA-URL": "", "INPUT_DATA-BRANCH": ""}
+    for k, v in env.items():
+        monkeypatch.setenv(k, v)
+
+    def branches():
+        return git("ls-remote", "--heads", "origin", cwd=work)
+
+    (work / ".usescout.yml").write_text("profile: python\nname: mypkg\nsources: [fake]\ndata_branch: from-config\n")
+    assert cli.main(["action"]) == 0
+    assert "refs/heads/from-config" in branches()                              # the config file's branch is used
+
+    monkeypatch.setenv("INPUT_DATA-BRANCH", "from-input")                      # an explicit input does win
+    assert cli.main(["action"]) == 0
+    assert "refs/heads/from-input" in branches()
+
+    monkeypatch.setenv("INPUT_DATA-BRANCH", "")                                # old config name still works
+    (work / ".usescout.yml").unlink()
+    (work / ".whouses.yml").write_text("profile: python\nname: mypkg\nsources: [fake]\ndata_branch: legacy\n")
+    assert cli.main(["action"]) == 0
+    assert "refs/heads/legacy" in branches()
+    assert len(rows(work, "legacy", "data/findings.jsonl")) == 1
