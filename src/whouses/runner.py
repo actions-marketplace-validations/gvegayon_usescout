@@ -207,7 +207,7 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
                  {f.id for f in routed.accept}, state.get("review_pr"))
     if git.commit_all(data_wt, f"whouses: update {cfg.name} ({iso})"):
         git.push(data_wt, cfg.data_branch)
-        res.counts["committed"] = True
+        res.counts["committed"] = git.push_enabled   # a dry run commits locally but pushes nothing
     return res
 
 

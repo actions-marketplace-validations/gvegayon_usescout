@@ -92,6 +92,7 @@ def test_all_sources_pipeline_with_llm_and_bot_only_commits(repo, tmp_path):
                        "owner": {"login": full.split("/")[0]}}}
     respx.get("https://api.github.com/search/code").mock(return_value=httpx.Response(200, json={"items": [
         item("a/one"), item("b/fork", fork=True), item("me/mypkg"),  # fork and own repo are excluded
+        item("cran/mypkg"),                                         # CRAN's mirror of the package itself
         item("c/comment", text="# just a comment about mypkg")]}))
     respx.get("https://packages.ecosyste.ms/api/v1/registries/pypi.org/packages/mypkg/dependent_packages").mock(
         return_value=httpx.Response(200, json=[{"name": "dep1", "repository_url": "https://github.com/acme/dep1",
@@ -116,6 +117,7 @@ def test_all_sources_pipeline_with_llm_and_bot_only_commits(repo, tmp_path):
     assert f["https://github.com/a/one"]["usage_class"] == "uses"
     assert f["https://pypi.org/project/dep1"]["usage_class"] == "depends"
     assert "https://github.com/b/fork" not in f and "https://github.com/me/mypkg" not in f
+    assert "https://github.com/cran/mypkg" not in f
     assert "https://github.com/c/comment" not in f                         # LLM said false positive -> dropped
     assert f["https://doi.org/10.2/a"]["cites_package"] == "yes"
     assert f["https://doi.org/10.3/b"]["cites_package"] == "no"            # same paper from 3 sources, one finding

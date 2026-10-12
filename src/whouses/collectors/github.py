@@ -16,6 +16,7 @@ def collect(ctx: Context) -> list[Candidate]:
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github.text-match+json",
                "X-GitHub-Api-Version": "2022-11-28"}
     own = (ctx.cfg.repo or "").lower()
+    pkg = ctx.cfg.name.lower()
     excluded = ctx.cfg.owner_excludes
     frags: dict[str, dict[str, str]] = {}      # repo -> {path: fragment}
     meta: dict[str, Candidate] = {}
@@ -31,6 +32,8 @@ def collect(ctx: Context) -> list[Candidate]:
                 repo = it["repository"]
                 full = repo["full_name"]
                 if repo.get("fork") or full.lower() == own or repo["owner"]["login"].lower() in excluded:
+                    continue
+                if full.split("/")[-1].lower() == pkg:  # mirrors/copies of the package itself (e.g. cran/<pkg>)
                     continue
                 key = full.lower()
                 meta.setdefault(key, Candidate(
