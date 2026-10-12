@@ -12,6 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Tag must match the package version
+        run: |
+          v=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != pyproject version v$v"; exit 1; }
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -45,6 +49,10 @@ jobs:
         run: |
           major="${GITHUB_REF_NAME%%.*}"
           git tag -f "$major" && git push -f origin "$major"
+      - name: Create the GitHub Release (please-bump reads releases to know what is already released)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
   pypi:
     runs-on: ubuntu-latest
     environment: pypi

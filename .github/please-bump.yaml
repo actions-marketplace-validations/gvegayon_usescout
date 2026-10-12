@@ -1,0 +1,23 @@
+version: 1
+
+defaults:
+  unchanged-policy: release   # bump once after each release, not on every PR
+
+waiver:
+  labels: [no-version-bump]
+  marker: true
+
+groups:
+  whouses:
+    # only changes that alter what ships need a bump; docs, tests and CI do not
+    paths: |
+      src/
+      pyproject.toml
+      Dockerfile
+      action.yml
+    consistency: identical     # pyproject.toml and __init__.py must carry the same version
+    rules:
+      - preset: python-pyproject
+        files: [pyproject.toml]
+      - preset: python-dunder
+        files: [src/whouses/__init__.py]
