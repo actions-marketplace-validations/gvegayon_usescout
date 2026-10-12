@@ -348,3 +348,28 @@ def test_action_entrypoint_config_branch_wins_unless_input_is_set(repo, tmp_path
     assert cli.main(["action"]) == 0
     assert "refs/heads/legacy" in branches()
     assert len(rows(work, "legacy", "data/findings.jsonl")) == 1
+
+
+@respx.mock
+def test_github_rate_limit_on_a_later_query_keeps_earlier_results(repo, tmp_path):
+    """Regression: a 429 on the second code-search query used to abort the whole source and drop the first query's repos."""
+    from usescout.http import Http
+
+    work, _ = repo
+
+    def search(request: httpx.Request) -> httpx.Response:
+        if request.url.params["q"].startswith('"import mypkg"'):
+            return httpx.Response(200, json={"items": [{
+                "path": "a.py", "html_url": "https://github.com/a/one/blob/abc/a.py",
+                "text_matches": [{"fragment": "import mypkg"}],
+                "repository": {"full_name": "a/one", "html_url": "https://github.com/a/one", "fork": False,
+                               "owner": {"login": "a"}}}]})
+        return httpx.Response(429, headers={"retry-after": "1"}, json={"message": "secondary rate limit"})
+    route = respx.get("https://api.github.com/search/code").mock(side_effect=search)
+
+    cfg = Config(profile="python", name="mypkg", repo="me/mypkg", sources=["github"])
+    res = run(cfg, work, token="t", search_token="t", http=Http(sleep=lambda s: None), api=FakeAPI(),
+              today=D, scratch=tmp_path / "s")
+    assert [r["url"] for r in rows(work, "usescout", "data/findings.jsonl")] == ["https://github.com/a/one"]
+    assert any("HTTP 429" in w for w in res.warnings) and res.counts["accepted"] == 1
+    assert route.call_count >= 4        # the 429 was retried (with waits) before giving up on that query

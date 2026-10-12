@@ -14,6 +14,17 @@ class Http:
         self.sleep = sleep
         self.retries = retries
 
+    @staticmethod
+    def _wait(r: httpx.Response, attempt: int) -> int:
+        """Seconds to wait before retrying: what the server asks for, else a backoff long enough for search limits."""
+        ra = r.headers.get("retry-after", "")
+        if ra.isdigit():
+            return int(ra)
+        reset = r.headers.get("x-ratelimit-reset", "")
+        if r.headers.get("x-ratelimit-remaining") == "0" and reset.isdigit():
+            return max(int(reset) - int(time.time()), 1)
+        return (20, 45, 70)[min(attempt, 2)] if r.status_code in (403, 429) else 2 ** (attempt + 2)
+
     def get(self, url: str, **kw) -> httpx.Response:
         last = None
         for attempt in range(self.retries):
@@ -21,8 +32,7 @@ class Http:
             if r.status_code in (429, 502, 503, 504) or (
                 r.status_code == 403 and r.headers.get("x-ratelimit-remaining") == "0"
             ):
-                wait = int(r.headers.get("retry-after", 2 ** (attempt + 2)))
-                self.sleep(min(wait, 90))
+                self.sleep(min(self._wait(r, attempt), 90))
                 last = r
                 continue
             return r

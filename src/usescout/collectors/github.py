@@ -1,6 +1,8 @@
 """GitHub code search. Needs a token; code search is limited to ~10 requests/minute and 1000 hits/query."""
 from __future__ import annotations
 
+import httpx
+
 from .. import evidence
 from ..models import Candidate
 from . import Context
@@ -23,11 +25,14 @@ def collect(ctx: Context) -> list[Candidate]:
     meta: dict[str, Candidate] = {}
     for q in ctx.profile.get("code", {}).get("search_queries", []):
         for page in range(1, MAX_PAGES + 1):
-            r = ctx.http.get(API, params={"q": q, "per_page": 100, "page": page}, headers=headers)
-            if r.status_code in (403, 422):
-                ctx.warn(f"github: query {q!r} stopped with HTTP {r.status_code}")
+            try:
+                r = ctx.http.get(API, params={"q": q, "per_page": 100, "page": page}, headers=headers)
+            except httpx.HTTPError as e:
+                ctx.warn(f"github: query {q!r} stopped ({type(e).__name__}); keeping what was found so far")
                 break
-            r.raise_for_status()
+            if r.status_code != 200:   # rate limit (429/403), invalid query (422), outage: keep earlier results
+                ctx.warn(f"github: query {q!r} stopped with HTTP {r.status_code}; keeping what was found so far")
+                break
             items = r.json().get("items", [])
             for it in items:
                 repo = it["repository"]
