@@ -1,0 +1,38 @@
+name: whouses
+description: Track who uses your research software across code hosts, registries and the literature.
+author: George G. Vega Yon
+branding:
+  icon: search
+  color: blue
+inputs:
+  config:
+    description: Path to the whouses config in the repo.
+    default: .whouses.yml
+  github-token:
+    description: Token used to open and update the review PR. Keep the default so the PR is authored by github-actions[bot].
+    default: ${{ github.token }}
+  search-token:
+    description: Optional token used ONLY for GitHub code search (a PAT may be needed). Never used to commit or open PRs.
+    default: ""
+  llm-provider:
+    description: none | anthropic | openai | gemini | ollama
+    default: none
+  llm-model:
+    description: Model name; provider default when empty.
+    default: ""
+  llm-api-key:
+    description: API key for the chosen provider.
+    default: ""
+  ollama-url:
+    description: Base URL of an Ollama server (e.g. http://localhost:11434).
+    default: ""
+  data-branch:
+    description: Branch that stores the database.
+    default: whouses-data
+  dry-run:
+    description: "true = collect and report counts, but push nothing."
+    default: "false"
+runs:
+  using: docker
+  image: docker://ghcr.io/gvegayon/whouses:v1
+  args: [action]

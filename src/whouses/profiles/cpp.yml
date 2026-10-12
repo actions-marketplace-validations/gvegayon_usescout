@@ -1,0 +1,18 @@
+id: cpp
+registries:
+  - {ecosystem: conan, name: "{name}"}
+code:
+  languages: [C, C++, CMake]
+  usage_patterns:
+    - '#\s*include\s*[<"]{name}[/.]'
+    - 'find_package\(\s*{name}\b'
+    - 'target_link_libraries\([^)]*\b{name}\b'
+  manifest_patterns:
+    - {files: [vcpkg.json, conanfile.txt, conanfile.py], regex: '(?i)\b{name}\b'}
+  search_queries:
+    - '"#include <{name}/" language:C++'
+    - '"find_package({name}" language:CMake'
+literature:
+  terms: ["{name}"]
+  context_terms: [C++, library, header]
+false_positive_guards: []

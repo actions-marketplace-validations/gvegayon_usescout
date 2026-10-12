@@ -1,0 +1,16 @@
+id: cli
+code:
+  languages: [Shell, Dockerfile, Nextflow, Snakemake]
+  usage_patterns:
+    - '(?m)^\s*(?:\$\s*)?{name}\s+-'
+    - '(?m)^\s*(?:RUN|CMD)\s+[^\n]*\b{name}\b'
+    - 'conda\s+install[^\n]*\b{name}\b'
+  manifest_patterns:
+    - {files: [environment.yml, Dockerfile, "*.nf", Snakefile], regex: '(?i)\b{name}\b'}
+  search_queries:
+    - '"{name} --" language:Shell'
+    - '"{name}" filename:Dockerfile'
+literature:
+  terms: ["{name}"]
+  context_terms: [software, tool, command line]
+false_positive_guards: []

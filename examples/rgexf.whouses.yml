@@ -1,0 +1,13 @@
+profile: r
+name: rgexf
+repo: gvegayon/rgexf
+doi: []                       # add the JOSS/Zenodo DOI(s) of the package to detect citations
+sources: [github, ecosystems, openalex, europepmc]
+overrides:
+  literature: {context_terms: [gexf, gephi, R, network]}
+  visual:
+    examples:
+      - {path: .whouses/network.png, description: "Network drawn in Gephi from a GEXF file written by rgexf"}
+    max_papers_per_run: 30
+review: {accept: 0.85, review: 0.4, max_items_per_pr: 100, on_close: reject}
+llm: {max_calls_per_run: 200}

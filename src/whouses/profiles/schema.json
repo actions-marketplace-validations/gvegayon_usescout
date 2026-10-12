@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "whouses software profile",
+  "type": "object",
+  "required": ["id"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {"type": "string"},
+    "extends": {"type": "string"},
+    "registries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ecosystem"],
+        "properties": {"ecosystem": {"type": "string"}, "name": {"type": "string"}}
+      }
+    },
+    "code": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "languages": {"type": "array", "items": {"type": "string"}},
+        "usage_patterns": {"type": "array", "items": {"type": "string"}},
+        "manifest_patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["files", "regex"],
+            "properties": {
+              "files": {"type": "array", "items": {"type": "string"}},
+              "regex": {"type": "string"}
+            }
+          }
+        },
+        "search_queries": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "literature": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "terms": {"type": "array", "items": {"type": "string"}},
+        "context_terms": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "false_positive_guards": {"type": "array", "items": {"type": "string"}},
+    "visual": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "examples": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path"],
+            "properties": {"path": {"type": "string"}, "description": {"type": "string"}}
+          }
+        },
+        "search_terms": {"type": "array", "items": {"type": "string"}},
+        "max_papers_per_run": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

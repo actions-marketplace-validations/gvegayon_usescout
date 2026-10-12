@@ -1,0 +1,5 @@
+profile: [cpp, python]     # a C++ library with Python bindings
+name: mylib
+repo: me/mylib
+overrides:
+  code: {search_queries: ['"#include <mylib/" language:C++', '"import mylib" language:Python']}

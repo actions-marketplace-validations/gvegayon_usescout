@@ -1,0 +1,18 @@
+id: npm
+registries:
+  - {ecosystem: npm, name: "{name}"}
+code:
+  languages: [JavaScript, TypeScript]
+  usage_patterns:
+    - 'require\(\s*["'']{name}(?:/[^"'']*)?["'']\s*\)'
+    - 'from\s+["'']{name}(?:/[^"'']*)?["'']'
+    - 'import\s*\(\s*["'']{name}["'']\s*\)'
+  manifest_patterns:
+    - {files: [package.json], regex: '"{name}"\s*:\s*"'}
+  search_queries:
+    - '"require(''{name}'')" language:JavaScript'
+    - '"from ''{name}''" language:TypeScript'
+literature:
+  terms: ["{name}"]
+  context_terms: [npm, JavaScript, Node.js]
+false_positive_guards: []

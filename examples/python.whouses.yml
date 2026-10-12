@@ -1,0 +1,5 @@
+profile: python
+name: my-package
+import_name: my_package
+repo: me/my-package
+sources: [github, ecosystems, openalex, europepmc]

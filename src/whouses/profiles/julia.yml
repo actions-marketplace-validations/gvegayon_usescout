@@ -1,0 +1,15 @@
+id: julia
+registries:
+  - {ecosystem: julia, name: "{name}"}
+code:
+  languages: [Julia]
+  usage_patterns:
+    - '^\s*(?:using|import)\s+[^\n]*\b{name}\b'
+  manifest_patterns:
+    - {files: [Project.toml], regex: '(?m)^{name}\s*='}
+  search_queries:
+    - '"using {name}" language:Julia'
+literature:
+  terms: ["{name}"]
+  context_terms: [Julia, package]
+false_positive_guards: []

@@ -1,0 +1,17 @@
+id: python
+registries:
+  - {ecosystem: pypi, name: "{name}"}
+code:
+  languages: [Python, Jupyter Notebook]
+  usage_patterns:
+    - '^\s*import\s+{import_name}\b'
+    - '^\s*from\s+{import_name}(?:\.|\s)'
+  manifest_patterns:
+    - {files: [requirements.txt, requirements-dev.txt, pyproject.toml, setup.cfg, setup.py, environment.yml, Pipfile], regex: '(?im)^\s*[-"'']*\s*{name}\b'}
+  search_queries:
+    - '"import {import_name}" language:Python'
+    - '"from {import_name}" language:Python'
+literature:
+  terms: ["{name}"]
+  context_terms: [Python, package, library, PyPI]
+false_positive_guards: []

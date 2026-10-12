@@ -1,0 +1,14 @@
+name: dogfood
+on:
+  schedule: [{ cron: "0 6 * * 1" }]
+  workflow_dispatch: {}
+permissions: { contents: write, pull-requests: write }
+concurrency: whouses
+jobs:
+  whouses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          search-token: ${{ secrets.WHOUSES_SEARCH_PAT }}   # optional; used only for code search, PRs stay bot-authored

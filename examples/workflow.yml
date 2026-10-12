@@ -1,0 +1,17 @@
+# Save as .github/workflows/whouses.yml in the repo of the package you want to track.
+name: whouses
+on:
+  schedule: [{ cron: "0 6 * * 1" }]   # every Monday
+  workflow_dispatch: {}
+permissions: { contents: write, pull-requests: write }
+concurrency: whouses                   # never run two at once (the review branch is shared)
+jobs:
+  whouses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gvegayon/whouses@v1
+        with:
+          search-token: ${{ secrets.WHOUSES_SEARCH_PAT }}   # optional; used only for code search, PRs stay bot-authored
+          llm-provider: anthropic                                    # none | anthropic | openai | gemini | ollama
+          llm-api-key: ${{ secrets.ANTHROPIC_API_KEY }}

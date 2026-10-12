@@ -1,0 +1,19 @@
+id: r
+registries:
+  - {ecosystem: cran, name: "{name}"}
+code:
+  languages: [R, Rmd, Quarto]
+  usage_patterns:
+    - '\b(?:library|require|requireNamespace|loadNamespace)\(\s*["'']?{name}["'']?\s*[,)]'
+    - '\b{name}::'
+  manifest_patterns:
+    - {files: [DESCRIPTION], regex: '(?im)^\s*(?:Imports|Depends|Suggests|LinkingTo)\b[^\n]*\b{name}\b'}
+    - {files: [renv.lock], regex: '"Package"\s*:\s*"{name}"'}
+  search_queries:
+    - '"library({name})" language:R'
+    - '"{name}::" language:R'
+    - '"library({name})" extension:Rmd'
+literature:
+  terms: ["{name}"]
+  context_terms: [R, CRAN, package, library]
+false_positive_guards: []
