@@ -11,6 +11,17 @@ API = "https://api.github.com/search/code"
 MAX_PAGES = 10  # 100 per page -> GitHub caps at 1000 results per query
 
 
+def _why(r: httpx.Response) -> str:
+    """What GitHub said, so a rate limit can be told apart from a permissions problem in the workflow log."""
+    try:
+        msg = str(r.json().get("message", ""))[:110]
+    except ValueError:
+        msg = r.text[:110]
+    h = r.headers
+    return (f"{msg!r}; retry-after={h.get('retry-after')}, remaining={h.get('x-ratelimit-remaining')}, "
+            f"resource={h.get('x-ratelimit-resource')}")
+
+
 def collect(ctx: Context) -> list[Candidate]:
     token = ctx.search_token or ctx.token
     if not token:
@@ -31,7 +42,8 @@ def collect(ctx: Context) -> list[Candidate]:
                 ctx.warn(f"github: query {q!r} stopped ({type(e).__name__}); keeping what was found so far")
                 break
             if r.status_code != 200:   # rate limit (429/403), invalid query (422), outage: keep earlier results
-                ctx.warn(f"github: query {q!r} stopped with HTTP {r.status_code}; keeping what was found so far")
+                ctx.warn(f"github: query {q!r} stopped with HTTP {r.status_code} ({_why(r)}); "
+                         "keeping what was found so far")
                 break
             items = r.json().get("items", [])
             for it in items:
@@ -47,7 +59,7 @@ def collect(ctx: Context) -> list[Candidate]:
                     owner=repo["owner"]["login"]))
                 frag = " ".join(m.get("fragment", "") for m in it.get("text_matches", []))
                 frags.setdefault(key, {}).setdefault(it.get("path", ""), (frag, it.get("html_url", "")))
-            ctx.http.sleep(6.5)  # stay under the code-search rate limit
+            ctx.http.sleep(10)  # code search allows ~10 requests/minute; stay well under it
             if len(items) < 100:
                 break
     # Search returns files in a different order from run to run; sort by path so the evidence is stable.
