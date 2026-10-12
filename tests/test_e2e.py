@@ -373,3 +373,21 @@ def test_github_rate_limit_on_a_later_query_keeps_earlier_results(repo, tmp_path
     assert [r["url"] for r in rows(work, "usescout", "data/findings.jsonl")] == ["https://github.com/a/one"]
     assert any("HTTP 429" in w for w in res.warnings) and res.counts["accepted"] == 1
     assert route.call_count >= 4        # the 429 was retried (with waits) before giving up on that query
+
+
+@respx.mock
+def test_a_long_retry_after_is_not_retried(repo, tmp_path):
+    """GitHub said 'try again in 736s' (secondary rate limit): stop asking instead of retrying and extending the penalty."""
+    from usescout.http import Http
+
+    work, _ = repo
+    route = respx.get("https://api.github.com/search/code").mock(return_value=httpx.Response(
+        429, headers={"retry-after": "736", "x-ratelimit-remaining": "9", "x-ratelimit-resource": "code_search"},
+        json={"message": "You have exceeded a secondary rate limit. try again in 736s"}))
+    slept = []
+    cfg = Config(profile="python", name="mypkg", repo="me/mypkg", sources=["github"])
+    res = run(cfg, work, token="t", search_token="t", http=Http(sleep=slept.append), api=FakeAPI(),
+              today=D, scratch=tmp_path / "s")
+    assert route.call_count == 2                       # one request per query (python has two), no retries
+    assert not any(s > 90 for s in slept)              # never sleeps minutes inside a job
+    assert any("retry-after=736" in w and "code_search" in w for w in res.warnings)

@@ -5,6 +5,7 @@ import time
 
 import httpx
 
+MAX_WAIT = 90   # longest we will wait inside one request; a longer Retry-After is returned to the caller
 UA = "usescout/0.1 (+https://github.com/gvegayon/usescout)"
 
 
@@ -32,7 +33,10 @@ class Http:
             if r.status_code in (429, 502, 503, 504) or (
                 r.status_code == 403 and r.headers.get("x-ratelimit-remaining") == "0"
             ):
-                self.sleep(min(self._wait(r, attempt), 90))
+                wait = self._wait(r, attempt)
+                if wait > MAX_WAIT:   # told to stay away for minutes: retrying now would only extend the penalty
+                    return r
+                self.sleep(wait)
                 last = r
                 continue
             return r
