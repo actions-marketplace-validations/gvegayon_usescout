@@ -59,10 +59,6 @@ A profile is YAML that says how use of a kind of software shows up: registry, co
 - Delete a line in `data/review/pending.jsonl` to reject an item, then merge to accept the rest. Closing the PR rejects everything in it (`review.on_close: snooze` re-proposes after `snooze_weeks`).
 - Flood safeguard: at most `max_items_per_pr` (100) items are detailed in a PR. The rest go to `data/review/backlog.csv` (delete rows to bulk-reject) and are promoted in later PRs. If a run finds far more than usual (`spike_factor`), nothing is auto-accepted and the PR warns about a possible name collision.
 
-## Visual matching
-
-If your software produces recognizable figures, put reference images in the repo and list them under `visual.examples` in the profile (see [`examples/rgexf.whouses.yml`](examples/rgexf.whouses.yml)). With an LLM configured, whouses downloads open-access PDFs that reached it from Europe PMC, extracts figures in memory (never stored), shortlists them by perceptual hash, and asks a vision model whether they look like your output. Visual matches always go to review.
-
 ## LLMs
 
 `llm-provider`: `anthropic`, `openai`, `gemini`, `ollama` or `none` (heuristics only). Only ambiguous hits are sent, capped by `llm.max_calls_per_run`, and answers are cached by evidence hash. Snippets of at most 300 characters are what get stored. Prompts treat snippets as data, but an LLM can still be fooled by hostile text, which is one reason uncertain items go to human review.
@@ -70,6 +66,6 @@ If your software produces recognizable figures, put reference images in the repo
 ## Development
 
 ```
-pip install -e '.[dev,visual]'
+pip install -e '.[dev]'
 pytest -q && ruff check .
 ```

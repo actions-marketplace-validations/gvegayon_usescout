@@ -1,6 +1,6 @@
 {
   "name": "whouses",
   "image": "mcr.microsoft.com/devcontainers/python:3.12",
-  "postCreateCommand": "pip install -e '.[dev,visual]'",
+  "postCreateCommand": "pip install -e '.[dev]'",
   "customizations": { "vscode": { "extensions": ["ms-python.python", "charliermarsh.ruff"] } }
 }

@@ -27,15 +27,11 @@ def build_prompt(snippet: str, name: str, context: str = "") -> str:
     return f"Package: {name}\n{('Context: ' + context + chr(10)) if context else ''}Snippet:\n<<<\n{snippet[:1200]}\n>>>"
 
 
-def parse_json_obj(text: str) -> dict:
+def parse_json(text: str) -> dict:
     m = re.search(r"\{.*\}", text, re.S)
     if not m:
         raise ValueError("no JSON in model output")
-    return json.loads(m.group(0))
-
-
-def parse_json(text: str) -> dict:
-    d = parse_json_obj(text)
+    d = json.loads(m.group(0))
     cls = d.get("usage_class")
     if cls not in ("uses", "depends", "mentions", "false_positive"):
         raise ValueError(f"bad usage_class {cls!r}")
@@ -45,47 +41,38 @@ def parse_json(text: str) -> dict:
     return d
 
 
-def complete(cfg: LLMCfg, http: Http, system: str, prompt: str,
-             images: list[tuple[str, bytes]] | None = None) -> str:
-    """Send one request; images are (mime, bytes) pairs."""
-    import base64
-
+def complete(cfg: LLMCfg, http: Http, system: str, prompt: str) -> str:
+    """Send one text request and return the model's reply."""
     prov = cfg.provider
     model = cfg.model or DEFAULT_MODELS.get(prov, "")
-    imgs = [(m, base64.b64encode(b).decode()) for m, b in (images or [])]
     if prov == "anthropic":
-        content = [{"type": "image", "source": {"type": "base64", "media_type": m, "data": d}} for m, d in imgs]
-        content.append({"type": "text", "text": prompt})
         r = http.client.post("https://api.anthropic.com/v1/messages", headers={
             "x-api-key": cfg.api_key, "anthropic-version": "2023-06-01"}, json={
             "model": model, "max_tokens": 400, "system": system,
-            "messages": [{"role": "user", "content": content}]})
+            "messages": [{"role": "user", "content": prompt}]})
         r.raise_for_status()
         return r.json()["content"][0]["text"]
     if prov == "openai":
-        content = [{"type": "image_url", "image_url": {"url": f"data:{m};base64,{d}"}} for m, d in imgs]
-        content.append({"type": "text", "text": prompt})
         r = http.client.post("https://api.openai.com/v1/chat/completions",
                              headers={"Authorization": f"Bearer {cfg.api_key}"}, json={
             "model": model, "messages": [{"role": "system", "content": system},
-                                         {"role": "user", "content": content}]})
+                                         {"role": "user", "content": prompt}]})
         r.raise_for_status()
         return r.json()["choices"][0]["message"]["content"]
     if prov == "gemini":
-        parts = [{"inline_data": {"mime_type": m, "data": d}} for m, d in imgs] + [{"text": prompt}]
         r = http.client.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
             headers={"x-goog-api-key": cfg.api_key}, json={
                 "systemInstruction": {"parts": [{"text": system}]},
-                "contents": [{"role": "user", "parts": parts}]})
+                "contents": [{"role": "user", "parts": [{"text": prompt}]}]})
         r.raise_for_status()
         return r.json()["candidates"][0]["content"]["parts"][0]["text"]
     if prov == "ollama":
         base = (cfg.url or "http://localhost:11434").rstrip("/")
-        msg = {"role": "user", "content": prompt, "images": [d for _, d in imgs]}
         r = http.client.post(f"{base}/api/chat", json={
             "model": model, "stream": False, "format": "json",
-            "messages": [{"role": "system", "content": system}, msg]}, timeout=300)
+            "messages": [{"role": "system", "content": system},
+                         {"role": "user", "content": prompt}]}, timeout=300)
         r.raise_for_status()
         return r.json()["message"]["content"]
     raise ValueError(f"unknown llm provider {prov!r}")

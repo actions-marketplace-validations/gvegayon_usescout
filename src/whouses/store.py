@@ -85,7 +85,7 @@ class Store:
     def write_badge(self, label: str = "used by") -> dict:
         fs = list(self.findings().values())
         repos = sum(1 for f in fs if f.kind in ("repo", "package") and f.usage_class in ("uses", "depends"))
-        papers = sum(1 for f in fs if f.kind == "paper" and f.usage_class in ("uses", "mentions", "visual"))
+        papers = sum(1 for f in fs if f.kind == "paper" and f.usage_class in ("uses", "mentions"))
         badge = {"schemaVersion": 1, "label": label,
                  "message": f"{repos} repos · {papers} papers", "color": "blue"}
         (self.root / "badge.json").write_text(json.dumps(badge, indent=1) + "\n")

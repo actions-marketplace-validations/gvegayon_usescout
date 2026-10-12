@@ -68,37 +68,6 @@ def dedupe(findings: list[Finding]) -> list[Finding]:
     return list(best.values())
 
 
-def _visual_scan(cands, prof, cfg, http, state, workspace, iso, warn) -> list[Finding]:
-    """Look for figures that resemble the package's outputs in open-access PDFs (never stored)."""
-    from . import visual
-
-    refs = visual.load_refs(prof, workspace)
-    if not refs:
-        warn("visual: no reference images found at the configured paths")
-        return []
-    seen = state.setdefault("visual_seen", {})
-    budget = prof["visual"].get("max_papers_per_run", 30)
-    out = []
-    for c in cands:
-        if budget <= 0:
-            break
-        if c.kind != "paper" or not c.extra.get("pdf_url") or c.key() in seen:
-            continue
-        budget -= 1
-        seen[c.key()] = iso
-        try:
-            pdf = visual.download_pdf(http, c.extra["pdf_url"])
-            best = visual.scan_pdf(pdf, refs, cfg.llm, http, cfg.name) if pdf else None
-        except Exception as e:
-            warn(f"visual: {c.ref_id}: {type(e).__name__}: {e}")
-            continue
-        if best:
-            vc = c.model_copy(update={"ref_id": c.ref_id + "#visual"})
-            vc.snippet = f"Figure on page {best['page']} resembles package output."
-            out.append(Finding.from_candidate(vc, "visual", best["confidence"], "LLM: " + best["rationale"]))
-    return out
-
-
 def run(cfg: Config, workspace: Path, **kw) -> Result:
     scratch = Path(kw.pop("scratch", None) or tempfile.mkdtemp(prefix="whouses-"))
     try:
@@ -183,8 +152,6 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
     targets = citations.target_ids(http, cfg.doi) if cfg.doi else set()
     clf = Classifier(cfg.llm, http, state["cache"], warn)
     findings = _classify_all(cands, prof, cfg, clf, http, targets, state)
-    if prof.get("visual", {}).get("examples") and clf.enabled:
-        findings += _visual_scan(cands, prof, cfg, http, state, Path(workspace), iso, warn)
 
     findings = dedupe(findings)
     known = set(store.findings())

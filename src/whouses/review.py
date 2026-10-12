@@ -31,7 +31,7 @@ def route(findings: list[Finding], cfg: ReviewCfg, known_ids: set[str],
     for f in fresh:
         if f.usage_class == "false_positive" or f.confidence < cfg.review:
             r.dropped.append(f)
-        elif f.confidence >= cfg.accept and f.usage_class != "visual" and not r.spike:
+        elif f.confidence >= cfg.accept and not r.spike:
             r.accept.append(f)
         else:
             r.review.append(f)

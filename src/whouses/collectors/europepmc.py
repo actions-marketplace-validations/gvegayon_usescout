@@ -32,14 +32,12 @@ def collect(ctx: Context) -> list[Candidate]:
                     snippet = snippet[max(i - 120, 0): i + 180]
                 else:
                     snippet = f"Full text of this open-access article matches “{term}”."
-                pdf = next((u["url"] for u in r.get("fullTextUrlList", {}).get("fullTextUrl", [])
-                            if u.get("documentStyle") == "pdf" and u.get("availabilityCode") == "OA"), "")
                 c = Candidate(
                     source="europepmc", kind="paper", ref_id=ident,
                     url=f"https://doi.org/{doi}" if doi else f"https://europepmc.org/article/{r.get('source')}/{r.get('id')}",
                     title=r.get("title", ""), owner=r.get("authorString", "")[:120],
                     date=r.get("firstPublicationDate", ""), snippet=snippet,
-                    extra={"fulltext_only": i < 0, "no_snippet": i < 0, "precision": "low", "pdf_url": pdf})
+                    extra={"fulltext_only": i < 0, "no_snippet": i < 0, "precision": "low"})
                 out.setdefault(c.key(), c)
             nxt = data.get("nextCursorMark")
             if not nxt or nxt == cursor or len(data.get("resultList", {}).get("result", [])) < 100:

@@ -43,22 +43,6 @@
         "context_terms": {"type": "array", "items": {"type": "string"}}
       }
     },
-    "false_positive_guards": {"type": "array", "items": {"type": "string"}},
-    "visual": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "examples": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["path"],
-            "properties": {"path": {"type": "string"}, "description": {"type": "string"}}
-          }
-        },
-        "search_terms": {"type": "array", "items": {"type": "string"}},
-        "max_papers_per_run": {"type": "integer", "minimum": 0}
-      }
-    }
+    "false_positive_guards": {"type": "array", "items": {"type": "string"}}
   }
 }

@@ -9,7 +9,7 @@ from .models import Finding
 def write_report(root: Path, name: str, findings: list[Finding], new_ids: set[str], pr_number: int | None) -> None:
     repos = [f for f in findings if f.kind in ("repo", "package")]
     papers = [f for f in findings if f.kind == "paper"]
-    uncited = [f for f in papers if f.cites_package == "no" and f.usage_class in ("uses", "mentions", "visual")]
+    uncited = [f for f in papers if f.cites_package == "no" and f.usage_class in ("uses", "mentions")]
     new = [f for f in findings if f.id in new_ids]
     L = [f"# Who uses {name}", "",
          f"- Repositories / packages: **{len(repos)}**",

@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 Kind = Literal["repo", "package", "paper"]
-UsageClass = Literal["uses", "depends", "mentions", "visual", "false_positive", "unknown"]
+UsageClass = Literal["uses", "depends", "mentions", "false_positive", "unknown"]
 CitesPackage = Literal["yes", "no", "unknown"]
 
 
