@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: gvegayon/whouses@v1
+      - uses: gvegayon/whouses@v0
         with:
           search-token: ${{ secrets.WHOUSES_SEARCH_PAT }}   # optional; used only for code search, PRs stay bot-authored
           llm-provider: anthropic                                    # none | anthropic | openai | gemini | ollama

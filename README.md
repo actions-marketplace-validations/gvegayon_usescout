@@ -18,7 +18,7 @@ Find out who uses your research software, even when they don't cite it.
 3. Run it once with *workflow_dispatch*. Results appear on the `whouses-data` branch.
 4. Badge: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/<owner>/<repo>/whouses-data/badge.json`
 
-The action uses the prebuilt image `ghcr.io/gvegayon/whouses:v1`, so nothing is built on your runner. Locally: `docker run --rm -v $PWD:/github/workspace -e GITHUB_WORKSPACE=/github/workspace ghcr.io/gvegayon/whouses:v1 dry-run --workspace /github/workspace` or `pipx install whouses`.
+The action uses the prebuilt image `ghcr.io/gvegayon/whouses:v0.1.1`, so nothing is built on your runner. Locally: `docker run --rm -v $PWD:/github/workspace -e GITHUB_WORKSPACE=/github/workspace ghcr.io/gvegayon/whouses:v0.1.1 dry-run --workspace /github/workspace` or `pipx install whouses`.
 
 ## Where the data lives
 

@@ -12,10 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Tag must match the package version
+      - name: Tag must match the package version and the image action.yml runs
         run: |
           v=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
           [ "v$v" = "$GITHUB_REF_NAME" ] || { echo "tag $GITHUB_REF_NAME != pyproject version v$v"; exit 1; }
+          grep -q "docker://ghcr.io/${GITHUB_REPOSITORY}:$GITHUB_REF_NAME\$" action.yml \
+            || { echo "action.yml must run docker://ghcr.io/${GITHUB_REPOSITORY}:$GITHUB_REF_NAME"; exit 1; }
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -30,7 +32,6 @@ jobs:
           tags: |
             type=semver,pattern=v{{version}}
             type=semver,pattern=v{{major}}.{{minor}}
-            type=semver,pattern=v{{major}}
             type=raw,value=latest
       - id: push
         uses: docker/build-push-action@v6

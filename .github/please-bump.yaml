@@ -21,3 +21,7 @@ groups:
         files: [pyproject.toml]
       - preset: python-dunder
         files: [src/whouses/__init__.py]
+      - scheme: pep440            # the image action.yml runs must be the one released for this version
+        files: [action.yml]
+        parts:
+          version: '^[[:space:]]*image:[[:space:]]*docker://ghcr\.io/gvegayon/whouses:v([0-9][^[:space:]]*)[[:space:]]*$'
