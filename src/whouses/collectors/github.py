@@ -1,6 +1,7 @@
 """GitHub code search. Needs a token; code search is limited to ~10 requests/minute and 1000 hits/query."""
 from __future__ import annotations
 
+from .. import evidence
 from ..models import Candidate
 from . import Context
 
@@ -18,7 +19,7 @@ def collect(ctx: Context) -> list[Candidate]:
     own = (ctx.cfg.repo or "").lower()
     pkg = ctx.cfg.name.lower()
     excluded = ctx.cfg.owner_excludes
-    frags: dict[str, dict[str, str]] = {}      # repo -> {path: fragment}
+    frags: dict[str, dict[str, tuple[str, str]]] = {}      # repo -> {path: (fragment, file url)}
     meta: dict[str, Candidate] = {}
     for q in ctx.profile.get("code", {}).get("search_queries", []):
         for page in range(1, MAX_PAGES + 1):
@@ -40,15 +41,24 @@ def collect(ctx: Context) -> list[Candidate]:
                     source="github", kind="repo", ref_id=full, url=repo["html_url"], title=full,
                     owner=repo["owner"]["login"]))
                 frag = " ".join(m.get("fragment", "") for m in it.get("text_matches", []))
-                frags.setdefault(key, {}).setdefault(it.get("path", ""), frag)
+                frags.setdefault(key, {}).setdefault(it.get("path", ""), (frag, it.get("html_url", "")))
             ctx.http.sleep(6.5)  # stay under the code-search rate limit
             if len(items) < 100:
                 break
     # Search returns files in a different order from run to run; sort by path so the evidence is stable.
+    # Evidence = the line that matches (plus one line of context) from the first file that really matches.
+    patterns = evidence.code_patterns(ctx.profile)
     seen: dict[str, Candidate] = {}
     for key, cand in meta.items():
-        by_path = sorted(frags.get(key, {}).items())
-        cand.snippet = " … ".join(f for _, f in by_path if f)[:600]
-        cand.extra = {"path": by_path[0][0] if by_path else ""}
+        files = sorted(frags.get(key, {}).items())
+        if not files:
+            seen[key] = cand
+            continue
+        path, (frag, url) = next((f for f in files if evidence.has_match(f[1][0], patterns)), files[0])
+        more = len(files) - 1
+        cand.snippet = evidence.focus_code(frag, patterns, ctx.cfg.name)
+        cand.where = path + (f" (+{more} more file{'s' if more > 1 else ''})" if more else "")
+        cand.evidence_url = url
+        cand.extra = {"path": path}
         seen[key] = cand
     return list(seen.values())

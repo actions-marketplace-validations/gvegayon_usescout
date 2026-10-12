@@ -34,5 +34,5 @@ inputs:
     default: "false"
 runs:
   using: docker
-  image: docker://ghcr.io/gvegayon/whouses:v0.1.3
+  image: docker://ghcr.io/gvegayon/whouses:v0.1.4
   args: [action]

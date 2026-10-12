@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+SNIPPET_MAX = 400
 Kind = Literal["repo", "package", "paper"]
 UsageClass = Literal["uses", "depends", "mentions", "false_positive", "unknown"]
 CitesPackage = Literal["yes", "no", "unknown"]
@@ -21,7 +22,9 @@ class Candidate(BaseModel):
     title: str = ""
     owner: str = ""  # repo owner or paper authors
     date: str = ""
-    snippet: str = ""  # evidence text, kept short
+    snippet: str = ""  # an excerpt that shows the match itself (never a placeholder)
+    where: str = ""  # where the match was found: file path, "abstract", `full text, section "Methods"`, ...
+    evidence_url: str = ""  # link to the file or article the excerpt comes from
     ref_id: str = ""  # stable id within the source (repo full name, DOI, ...)
     cites_package: CitesPackage = "unknown"
     extra: dict = Field(default_factory=dict)
@@ -39,6 +42,8 @@ class Finding(BaseModel):
     owner: str = ""
     date: str = ""
     snippet: str = ""
+    where: str = ""
+    evidence_url: str = ""
     usage_class: UsageClass = "unknown"
     cites_package: CitesPackage = "unknown"
     confidence: float = 0.0
@@ -62,7 +67,9 @@ class Finding(BaseModel):
             title=c.title,
             owner=c.owner,
             date=c.date,
-            snippet=c.snippet[:300],
+            snippet=c.snippet[:SNIPPET_MAX],
+            where=c.where,
+            evidence_url=c.evidence_url,
             usage_class=usage_class,
             cites_package=c.cites_package,
             confidence=confidence,

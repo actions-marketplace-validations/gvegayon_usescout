@@ -46,7 +46,8 @@ def collect(ctx: Context) -> list[Candidate]:
                     source="ecosystems", kind="package", ref_id=f"{eco}:{p['name']}",
                     url=p.get("registry_url") or repo_url, title=p["name"], owner=owner,
                     date=(p.get("latest_release_published_at") or "")[:10],
-                    snippet=f"{p['name']} depends on {name} ({eco})",
+                    where=f"declares {name} as a dependency ({eco}, via ecosyste.ms)",
+                    evidence_url=p.get("registry_url") or repo_url,
                     extra={"precision": "high", "ecosystem": eco}))
         # paper mentions (CZI Software Mentions dataset); only the DOI is returned
         for m in _pages(ctx, f"{PAPERS}/projects/{eco}/{name}/mentions"):
@@ -55,6 +56,7 @@ def collect(ctx: Context) -> list[Candidate]:
                 continue
             out.append(Candidate(
                 source="ecosystems", kind="paper", ref_id=doi.lower(), url=f"https://doi.org/{doi}",
-                title="", snippet=f"Listed by papers.ecosyste.ms as mentioning {name}",
-                extra={"precision": "high"}))
+                title="", where="listed by papers.ecosyste.ms (CZI Software Mentions dataset)",
+                evidence_url=f"https://doi.org/{doi}",
+                extra={"precision": "high", "fulltext_match": True, "no_snippet": True}))
     return out

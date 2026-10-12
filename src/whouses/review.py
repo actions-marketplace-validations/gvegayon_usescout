@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 from pathlib import Path
 from statistics import median
 
@@ -10,7 +11,7 @@ from .config import ReviewCfg
 from .models import Finding
 
 BACKLOG_COLS = ["id", "kind", "title", "url", "source", "usage_class",
-                "cites_package", "confidence", "first_seen"]
+                "cites_package", "confidence", "first_seen", "where", "evidence_url", "snippet"]
 
 
 class Routed:
@@ -59,7 +60,8 @@ def read_backlog(p: Path) -> list[dict]:
         return list(csv.DictReader(fh))
 
 
-def build_review_files(root: Path, new_items: list[Finding], cfg: ReviewCfg, spike: bool = False) -> dict:
+def build_review_files(root: Path, new_items: list[Finding], cfg: ReviewCfg, spike: bool = False,
+                       highlight: list[str] | None = None) -> dict:
     """Write pending.jsonl (<= max_items_per_pr), backlog.csv (rest) and REVIEW.md under root/data/review.
 
     Existing pending + backlog are preserved (the PR is reused while open). Returns counts.
@@ -91,11 +93,11 @@ def build_review_files(root: Path, new_items: list[Finding], cfg: ReviewCfg, spi
     (d / "backlog.jsonl").write_text("".join(json.dumps(f.model_dump(), sort_keys=True) + "\n" for f in rest))
     (d / "pending.jsonl").write_text(
         "".join(json.dumps(f.model_dump(), sort_keys=True) + "\n" for f in _rank(list(pending.values()))))
-    _write_review_md(d / "REVIEW.md", _rank(list(pending.values())), len(rest), spike)
+    _write_review_md(d / "REVIEW.md", _rank(list(pending.values())), len(rest), spike, highlight or [])
     return {"pending": len(pending), "backlog": len(rest)}
 
 
-def _write_review_md(p: Path, items: list[Finding], backlog: int, spike: bool) -> None:
+def _write_review_md(p: Path, items: list[Finding], backlog: int, spike: bool, highlight: list[str]) -> None:
     lines = ["# Uncertain findings for review", ""]
     if spike:
         lines += ["> **Warning:** this run found unusually many new candidates. This can mean a "
@@ -108,10 +110,29 @@ def _write_review_md(p: Path, items: list[Finding], backlog: int, spike: bool) -
     for f in items:
         lines += [f"## [{f.title or f.url}]({f.url})",
                   f"- id `{f.id}` · {f.kind} · {f.source} · class **{f.usage_class}** · "
-                  f"cites package: {f.cites_package} · confidence {f.confidence:.2f}",
-                  f"- {f.rationale}" if f.rationale else "",
-                  f"> {f.snippet}" if f.snippet else "", ""]
+                  f"cites package: {f.cites_package} · confidence {f.confidence:.2f}"]
+        if f.where:
+            link = f" ([open]({f.evidence_url}))" if f.evidence_url else ""
+            lines.append(f"- **Found in:** {f.where}{link}")
+        if f.rationale:
+            lines.append(f"- {f.rationale}")
+        lines.append("")
+        lines += _excerpt(f, highlight)
+        lines.append("")
     p.write_text("\n".join(lines))
+
+
+def _excerpt(f: Finding, highlight: list[str]) -> list[str]:
+    """Code goes in a fenced block (multi-line safe); prose is quoted with the matched term in bold."""
+    if not f.snippet:
+        return ["_No excerpt available: nothing in the open text to show._"]
+    if f.kind in ("repo", "package"):
+        fence = "```" if "```" not in f.snippet else "````"
+        return [fence, f.snippet, fence]
+    text = f.snippet
+    for term in highlight:
+        text = re.sub(r"(?<![\w.])(" + re.escape(term) + r")(?!\w)", r"**\1**", text, flags=re.I)
+    return ["> " + ln for ln in text.splitlines()]
 
 
 def settle_merged(root: Path, store, before_ids: set[str]) -> tuple[int, int]:

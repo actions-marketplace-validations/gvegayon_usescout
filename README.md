@@ -18,7 +18,7 @@ Find out who uses your research software, even when they don't cite it.
 3. Run it once with *workflow_dispatch*. Results appear on the `whouses-data` branch.
 4. Badge: `https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/<owner>/<repo>/whouses-data/badge.json`
 
-The action runs a prebuilt image from `ghcr.io/gvegayon/whouses` (the tag matching the action version), so nothing is built on your runner. Use `gvegayon/whouses@v0` to follow 0.x releases, or pin an exact version such as `@v0.1.3`. Locally: `docker run --rm -v $PWD:/github/workspace -e GITHUB_WORKSPACE=/github/workspace ghcr.io/gvegayon/whouses:latest dry-run --workspace /github/workspace` or `pipx install git+https://github.com/gvegayon/whouses`.
+The action runs a prebuilt image from `ghcr.io/gvegayon/whouses` (the tag matching the action version), so nothing is built on your runner. Use `gvegayon/whouses@v0` to follow 0.x releases, or pin an exact version such as `@v0.1.4`. Locally: `docker run --rm -v $PWD:/github/workspace -e GITHUB_WORKSPACE=/github/workspace ghcr.io/gvegayon/whouses:latest dry-run --workspace /github/workspace` or `pipx install git+https://github.com/gvegayon/whouses`.
 
 ## Where the data lives
 
@@ -59,9 +59,19 @@ A profile is YAML that says how use of a kind of software shows up: registry, co
 - Delete a line in `data/review/pending.jsonl` to reject an item, then merge to accept the rest. Closing the PR rejects everything in it (`review.on_close: snooze` re-proposes after `snooze_weeks`).
 - Flood safeguard: at most `max_items_per_pr` (100) items are detailed in a PR. The rest go to `data/review/backlog.csv` (delete rows to bulk-reject) and are promoted in later PRs. If a run finds far more than usual (`spike_factor`), nothing is auto-accepted and the PR warns about a possible name collision.
 
+## Evidence: where exactly was it found?
+
+Every finding records where the package was found, so false positives are quick to spot (in the database, in `REPORT.md`, and in the review PR):
+
+- `where`: the file in the repo, or `abstract` / `full text, section “Methods”` / `its reference list cites <doi>` for papers.
+- `evidence_url`: a link to that file or article.
+- `snippet`: a short excerpt that shows the match itself (at most 400 characters): the matching line of code plus one line of context, or the paragraph window around the term in the paper. In the review PR code is shown in a fenced block and prose is quoted with the term in bold.
+
+Paper excerpts come from the open-access full text on Europe PMC (fetched in memory, never stored; up to `max_evidence_fetches` per run). Paywalled papers and preprints Europe PMC does not hold cannot be excerpted, and say so in `where`. Dependencies and citations are shown as such, without a text excerpt.
+
 ## LLMs
 
-`llm-provider`: `anthropic`, `openai`, `gemini`, `ollama` or `none` (heuristics only). Only ambiguous hits are sent, capped by `llm.max_calls_per_run`, and answers are cached by evidence hash. Snippets of at most 300 characters are what get stored. Prompts treat snippets as data, but an LLM can still be fooled by hostile text, which is one reason uncertain items go to human review.
+`llm-provider`: `anthropic`, `openai`, `gemini`, `ollama` or `none` (heuristics only). Only ambiguous hits are sent, capped by `llm.max_calls_per_run`, and answers are cached by evidence hash. Only the short excerpts described above are stored. Prompts treat snippets as data, but an LLM can still be fooled by hostile text, which is one reason uncertain items go to human review.
 
 ## Development
 

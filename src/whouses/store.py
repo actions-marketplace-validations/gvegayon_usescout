@@ -9,6 +9,11 @@ from pathlib import Path
 from .models import Finding
 
 
+def oneline(s: str, n: int = 200) -> str:
+    s = " ⏎ ".join(x.strip() for x in s.splitlines() if x.strip())
+    return s if len(s) <= n else s[: n - 1] + "…"
+
+
 class Store:
     def __init__(self, root: str | Path):
         self.root = Path(root)
@@ -40,8 +45,9 @@ class Store:
             old = cur.get(f.id)
             if old:
                 f.first_seen = old.first_seen
-                if old.usage_class == f.usage_class:   # same verdict: keep the original evidence, don't churn the file
+                if old.usage_class == f.usage_class and old.snippet:   # same verdict: keep the original evidence
                     f.snippet, f.rationale = old.snippet, old.rationale
+                    f.where, f.evidence_url = old.where, old.evidence_url
             else:
                 added += 1
             f.last_seen = today if old is None else max(old.last_seen, today)
@@ -54,7 +60,7 @@ class Store:
 
     def _write_views(self, fs: list[Finding]) -> None:
         cols = ["id", "kind", "title", "owner", "url", "source", "usage_class",
-                "cites_package", "confidence", "first_seen"]
+                "cites_package", "confidence", "first_seen", "where", "evidence_url", "snippet"]
         for name, kinds in (("repos", ("repo", "package")), ("papers", ("paper",))):
             rows = sorted((f for f in fs if f.kind in kinds), key=lambda f: f.id)
             with (self.root / f"data/{name}.csv").open("w", newline="") as fh:
@@ -62,6 +68,7 @@ class Store:
                 w.writerow(cols)
                 for f in rows:
                     d = f.model_dump()
+                    d["snippet"] = oneline(d["snippet"])
                     w.writerow([d[c] for c in cols])
 
     # -- rejected / state -----------------------------------------------

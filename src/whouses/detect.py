@@ -42,6 +42,8 @@ def classify(c: Candidate, profile: dict) -> tuple[UsageClass, float, str]:
         return "unknown", 0.3, "no pattern matched in snippet"
 
     # papers
+    if not text and c.extra.get("fulltext_match"):
+        return "mentions", 0.45, "full-text search reports the term; no excerpt available"
     terms = lit.get("terms", [])
     low = text.lower()
     if not any(t.lower() in low for t in terms):

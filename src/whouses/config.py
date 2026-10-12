@@ -45,6 +45,7 @@ class Config(BaseModel):
     profiles_dir: str = ".whouses/profiles"
     review: ReviewCfg = Field(default_factory=ReviewCfg)
     llm: LLMCfg = Field(default_factory=LLMCfg)
+    max_evidence_fetches: int = 60   # open-access full texts fetched per run to excerpt where a paper mentions the package
     data_branch: str = "whouses-data"
     # Folder (inside the data branch) holding data/, state.json, badge.json and REPORT.md. Default: the branch
     # root for a dedicated branch, ".whouses" when the data branch is the branch the workflow checked out.

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 
+from .. import evidence
 from ..models import Candidate
 from . import Context
 
@@ -23,21 +24,20 @@ def collect(ctx: Context) -> list[Candidate]:
             for r in data.get("resultList", {}).get("result", []):
                 doi = (r.get("doi") or "").lower()
                 ident = doi or f"{r.get('source')}:{r.get('id')}"
-                text = " ".join([r.get("title", ""), r.get("abstractText", "")])
-                snippet = _TAG.sub("", text)
-                low = snippet.lower()
-                # abstract/title rarely contain code; keep a window around the term when present
-                i = low.find(term.lower())
-                if i >= 0:
-                    snippet = snippet[max(i - 120, 0): i + 180]
-                else:
-                    snippet = f"Full text of this open-access article matches “{term}”."
+                title, abstract = _TAG.sub("", r.get("title", "")), _TAG.sub("", r.get("abstractText", ""))
+                snippet = evidence.window(abstract, term)
+                where = "abstract"
+                if snippet is None:
+                    snippet, where = evidence.window(title, term), "title"
+                found = snippet is not None
                 c = Candidate(
                     source="europepmc", kind="paper", ref_id=ident,
                     url=f"https://doi.org/{doi}" if doi else f"https://europepmc.org/article/{r.get('source')}/{r.get('id')}",
-                    title=r.get("title", ""), owner=r.get("authorString", "")[:120],
-                    date=r.get("firstPublicationDate", ""), snippet=snippet,
-                    extra={"fulltext_only": i < 0, "no_snippet": i < 0, "precision": "low"})
+                    title=evidence.strip_tags(r.get("title", "")), owner=r.get("authorString", "")[:120],
+                    date=r.get("firstPublicationDate", ""), snippet=snippet or "",
+                    where=where if found else "", evidence_url=f"https://europepmc.org/article/{r.get('source')}/{r.get('id')}",
+                    extra={"fulltext_match": not found, "no_snippet": not found, "precision": "low",
+                           "pmcid": r.get("pmcid", "")})
                 out.setdefault(c.key(), c)
             nxt = data.get("nextCursorMark")
             if not nxt or nxt == cursor or len(data.get("resultList", {}).get("result", [])) < 100:

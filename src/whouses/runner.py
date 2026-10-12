@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from pathlib import Path
 
-from . import citations, detect, review
+from . import citations, detect, evidence, review
 from . import profile as profiles
 from .collectors import Context, registry
 from .config import Config
@@ -50,6 +50,56 @@ def _classify_all(cands: list[Candidate], prof: dict, cfg: Config, clf: Classifi
     return out
 
 
+def _enrich(cands: list[Candidate], prof: dict, cfg: Config, http: Http, state: dict,
+            have_excerpt: set[str], today: date, warn) -> int:
+    """Give paper hits that have no excerpt one, from the open-access full text (Europe PMC).
+
+    Papers with no open full text get an explicit note instead, and are not retried for 60 days.
+    """
+    terms = prof.get("literature", {}).get("terms") or [cfg.name]
+    miss = state.setdefault("evidence_miss", {})
+    cutoff = (today - timedelta(days=60)).isoformat()
+    cache: dict[str, tuple[str, str, str] | None] = {}
+    fetched = failures = 0
+    for c in cands:
+        if c.kind != "paper" or c.snippet:
+            continue
+        if Finding.make_id(c) in have_excerpt:
+            continue
+        key = c.ref_id if c.ref_id.startswith("10.") else c.extra.get("pmcid", "")
+        if not key:
+            c.where = c.where or f"reported by {c.source}; the work has no DOI, so no excerpt could be fetched"
+            continue
+        if key in cache:
+            res = cache[key]
+        elif miss.get(key, "") > cutoff:
+            res = None
+        elif fetched >= cfg.max_evidence_fetches:
+            continue                      # the rest waits for the next run
+        else:
+            fetched += 1
+            try:
+                pmcid = c.extra.get("pmcid") or evidence.lookup_pmcid(http, key)
+                ex = evidence.paper_excerpt(http, pmcid, terms) if pmcid else None
+            except Exception as e:  # one unreachable paper must not stop the others
+                failures += 1
+                if failures == 1:
+                    warn(f"evidence: {type(e).__name__}: {e} (further failures not shown)")
+                continue
+            res = (ex[0], ex[1], f"https://europepmc.org/article/PMC/{pmcid}") if ex else None
+            if not res:
+                miss[key] = today.isoformat()
+            cache[key] = res
+        if res:
+            c.where = f"{c.where}; excerpt from {res[0]}" if c.where else res[0]   # e.g. "its reference list cites ...; excerpt from ..."
+            c.snippet, c.evidence_url = res[1], res[2]
+            c.extra["no_snippet"] = False
+        else:
+            note = "no open-access full text found to excerpt"
+            c.where = f"{c.where}; {note}" if c.where else f"reported by {c.source}; {note}"
+    return fetched
+
+
 def dedupe(findings: list[Finding]) -> list[Finding]:
     """One finding per id: keep the most confident, but never lose a known citation status."""
     best: dict[str, Finding] = {}
@@ -64,6 +114,9 @@ def dedupe(findings: list[Finding]) -> list[Finding]:
         for attr in ("title", "owner", "date"):  # sources differ in what they know; fill the gaps
             if not getattr(keep, attr) and getattr(other, attr):
                 setattr(keep, attr, getattr(other, attr))
+        if not keep.snippet and other.snippet:  # take the excerpt together with where it came from
+            keep.snippet, keep.evidence_url = other.snippet, other.evidence_url
+            keep.where = f"{keep.where}; excerpt from {other.where}" if keep.where else other.where
         best[f.id] = keep
     return list(best.values())
 
@@ -149,6 +202,8 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
             cands += got
         except Exception as e:  # one failing source must not sink the run
             warn(f"{src}: {type(e).__name__}: {e}")
+    have_excerpt = {i for i, f in store.findings().items() if f.snippet}
+    res.counts["excerpts_fetched"] = _enrich(cands, prof, cfg, http, state, have_excerpt, today, warn)
     targets = citations.target_ids(http, cfg.doi) if cfg.doi else set()
     clf = Classifier(cfg.llm, http, state["cache"], warn)
     findings = _classify_all(cands, prof, cfg, clf, http, targets, state)
@@ -182,7 +237,8 @@ def _run(cfg: Config, workspace: Path, token: str = "", search_token: str = "", 
             git.run("reset", "--hard", data_sha, cwd=rev_wt)
         rroot = rev_wt / sub if sub else rev_wt
         review.sync_backlog(rroot, Store(rroot))
-        counts = review.build_review_files(rroot, routed.review, cfg.review, routed.spike)
+        counts = review.build_review_files(rroot, routed.review, cfg.review, routed.spike,
+                                           prof.get("literature", {}).get("terms") or [cfg.name])
         res.counts.update(pr_pending=counts["pending"], pr_backlog=counts["backlog"])
         pend_ids = {f.id for f in review.read_jsonl(rroot / "data/review/pending.jsonl")}
         state["proposed"] = sorted(set(state.get("proposed", [])) | pend_ids) if pr_open else sorted(pend_ids)

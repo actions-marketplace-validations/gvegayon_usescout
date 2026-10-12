@@ -36,7 +36,9 @@ class FakeAPI:
 
 def cand(i, snippet, kind="repo"):
     return Candidate(source="fake", kind=kind, ref_id=f"o/r{i}", url=f"https://github.com/o/r{i}",
-                     title=f"o/r{i}", snippet=snippet, extra={"path": "x.py"})
+                     title=f"o/r{i}", snippet=snippet, extra={"path": "x.py"},
+                     where="abstract" if kind == "paper" else "x.py",
+                     evidence_url=f"https://github.com/o/r{i}/blob/abc/x.py")
 
 
 SURE = "import mypkg\nmypkg.go()"           # heuristics: uses 0.9 -> auto-accept
@@ -67,11 +69,33 @@ def _openalex(request: httpx.Request) -> httpx.Response:
     if "/works/doi:" in u:
         return httpx.Response(200, json={"referenced_works": []})
     if "cites%3AW1" in u or "cites:W1" in u:
-        return httpx.Response(200, json={"results": [paper(2, "10.2/a", "Cites us")], "meta": {"next_cursor": None}})
+        return httpx.Response(200, json={"results": [paper(2, "10.2/a", "Cites us"), paper(1, "10.1/pkg", "The package paper itself"),
+                                                   paper(5, "10.32614/CRAN.package.mypkg", "CRAN record of the package")],
+                                         "meta": {"next_cursor": None}})
     if "fulltext.search" in u:
-        return httpx.Response(200, json={"results": [paper(2, "10.2/a", "Cites us"), paper(3, "10.3/b", "Uses us quietly")],
+        return httpx.Response(200, json={"results": [paper(2, "10.2/a", "Cites us"), paper(3, "10.3/b", "Uses us quietly"),
+                                                   paper(4, "10.4/c", "Behind a paywall")],
                                          "meta": {"next_cursor": None}})
     return httpx.Response(404)
+
+
+FULLTEXT_XML = (
+    "<article><body><sec><title>Introduction</title><p>" + "Networks matter in many fields of science and engineering. " * 12 + "</p></sec>"
+    "<sec><title>Methods</title><p>We exported the graphs with the <italic>mypkg</italic> Python library "
+    "and plotted them in Gephi.</p></sec></body>"
+    "<back><ref-list><ref>Vega Yon. mypkg: a package. 2021.</ref></ref-list></back></article>")
+
+
+def _europepmc(request: httpx.Request) -> httpx.Response:
+    q = request.url.params.get("query", "")
+    if q.startswith("DOI:"):   # lookup of the open-access copy of a paper
+        for doi, pmc in (("10.3/b", "PMC123"), ("10.2/a", "PMC456")):
+            if doi in q:
+                return httpx.Response(200, json={"resultList": {"result": [{"pmcid": pmc, "isOpenAccess": "Y"}]}})
+        return httpx.Response(200, json={"resultList": {"result": [{"isOpenAccess": "N"}]}})   # no open full text
+    return httpx.Response(200, json={"nextCursorMark": "*", "resultList": {"result": [
+        {"doi": "10.5/e", "title": "T", "abstractText": "We analysed data with <i>mypkg</i>, a Python package.",
+         "authorString": "Bo", "firstPublicationDate": "2025-01-01", "source": "MED", "id": "1"}]}})
 
 
 def _llm(request: httpx.Request) -> httpx.Response:
@@ -87,7 +111,8 @@ def _llm(request: httpx.Request) -> httpx.Response:
 def test_all_sources_pipeline_with_llm_and_bot_only_commits(repo, tmp_path):
     work, _ = repo
     item = lambda full, fork=False, text="import mypkg": {  # noqa: E731
-        "path": "a.py", "text_matches": [{"fragment": text}],
+        "path": "a.py", "html_url": f"https://github.com/{full}/blob/abc123/a.py",
+        "text_matches": [{"fragment": f"import os\nimport sys\n{text}\nx = 1\ny = 2\nz = 3"}],
         "repository": {"full_name": full, "html_url": f"https://github.com/{full}", "fork": fork,
                        "owner": {"login": full.split("/")[0]}}}
     respx.get("https://api.github.com/search/code").mock(return_value=httpx.Response(200, json={"items": [
@@ -100,10 +125,10 @@ def test_all_sources_pipeline_with_llm_and_bot_only_commits(repo, tmp_path):
     respx.get("https://papers.ecosyste.ms/api/v1/projects/pypi/mypkg/mentions").mock(return_value=httpx.Response(
         200, json=[{"paper_url": "https://papers.ecosyste.ms/api/v1/papers/10.3%2Fb"}]))
     respx.route(host="api.openalex.org").mock(side_effect=_openalex)
-    respx.get("https://www.ebi.ac.uk/europepmc/webservices/rest/search").mock(return_value=httpx.Response(200, json={
-        "nextCursorMark": "*", "resultList": {"result": [
-            {"doi": "10.5/e", "title": "T", "abstractText": "We analysed data with <i>mypkg</i>, a Python package.",
-             "authorString": "Bo", "firstPublicationDate": "2025-01-01", "source": "MED", "id": "1"}]}}))
+    respx.get("https://www.ebi.ac.uk/europepmc/webservices/rest/search").mock(side_effect=_europepmc)
+    for pmc in ("PMC123", "PMC456"):
+        respx.get(f"https://www.ebi.ac.uk/europepmc/webservices/rest/{pmc}/fullTextXML").mock(
+            return_value=httpx.Response(200, text=FULLTEXT_XML))
     respx.post("https://api.anthropic.com/v1/messages").mock(side_effect=_llm)
 
     cfg = Config(profile="python", name="mypkg", repo="me/mypkg", doi=["10.1/pkg"],
@@ -122,11 +147,34 @@ def test_all_sources_pipeline_with_llm_and_bot_only_commits(repo, tmp_path):
     assert f["https://doi.org/10.2/a"]["cites_package"] == "yes"
     assert f["https://doi.org/10.3/b"]["cites_package"] == "no"            # same paper from 3 sources, one finding
     assert f["https://doi.org/10.5/e"]["rationale"].startswith("LLM:")     # ambiguous snippet judged by the LLM
-    assert not f["https://doi.org/10.3/b"]["rationale"].startswith("LLM:")  # no snippet -> no LLM call wasted
     assert len([r for r in f.values() if r["url"] == "https://doi.org/10.3/b"]) == 1
+
+    # every finding says where it was found and shows the match itself
+    one = f["https://github.com/a/one"]
+    assert one["where"] == "a.py" and one["evidence_url"] == "https://github.com/a/one/blob/abc123/a.py"
+    assert one["snippet"] == "import sys\nimport mypkg\nx = 1"            # the matching line +/- one line, not the head of the file
+    b = f["https://doi.org/10.3/b"]                                       # no excerpt from the sources: fetched from the full text
+    assert "Methods" in b["where"] and "mypkg" in b["snippet"] and b["evidence_url"].endswith("/PMC/PMC123")
+    assert b["snippet"] == "We exported the graphs with the mypkg Python library and plotted them in Gephi."   # that paragraph only
+    assert "abstract" in f["https://doi.org/10.5/e"]["where"] and "mypkg" in f["https://doi.org/10.5/e"]["snippet"]
+    a = f["https://doi.org/10.2/a"]                                       # cites us AND we can show the sentence
+    assert a["where"].startswith("its reference list cites 10.1/pkg (OpenAlex); excerpt from full text, section “Methods”")
+    assert "mypkg" in a["snippet"]
+    assert "https://doi.org/10.1/pkg" not in f                            # the package's own paper is not a user of it
+    assert "https://doi.org/10.32614/cran.package.mypkg" not in f         # nor is its CRAN record
+    assert "ecosyste.ms" in f["https://pypi.org/project/dep1"]["where"]
+    assert res.counts["excerpts_fetched"] == 3                              # 10.2/a, 10.3/b (found) and 10.4/c (no open full text)
+    assert "https://doi.org/10.4/c" not in f                                # weak signal, no excerpt: goes to review, not the database
+    pend = {r["url"]: r for r in rows(work, "whouses/review", "data/review/pending.jsonl")}
+    assert "no open-access full text found" in pend["https://doi.org/10.4/c"]["where"]
+    assert pend["https://doi.org/10.4/c"]["snippet"] == ""
+    assert "_No excerpt available" in show(work, "whouses/review", "data/review/REVIEW.md")
+    papers_csv = show(work, "whouses-data", "data/papers.csv")
+    assert "Methods" in papers_csv and "evidence_url" in papers_csv.splitlines()[0]
+    assert "Methods" in show(work, "whouses-data", "REPORT.md") and "mypkg" in show(work, "whouses-data", "REPORT.md")
     assert "Uses us quietly" in show(work, "whouses-data", "REPORT.md")      # used without citing
     assert json.loads(show(work, "whouses-data", "badge.json"))["message"] == "2 repos · 3 papers"
-    assert api.created == 0 and res.counts["llm_calls"] == 2
+    assert api.created == 1 and res.counts["llm_calls"] == 3   # the excerpt made 10.3/b judgeable
 
     assert commits_by_bot_only(work, "whouses-data") >= 1
 
@@ -141,6 +189,8 @@ def test_review_pr_lifecycle_merge_with_admin_edit(fake, tmp_path):
     assert (r1.counts["accepted"], r1.counts["to_review"], r1.counts["pr_opened"]) == (1, 5, 1)
     assert len(rows(work, "whouses-data", "data/findings.jsonl")) == 1
     assert len(rows(work, "whouses/review", "data/review/pending.jsonl")) == 5
+    md = show(work, "whouses/review", "data/review/REVIEW.md")
+    assert "**Found in:** abstract" in md and "> We used **mypkg**, a Python library" in md
 
     # PR still open: a new uncertain item is appended to the SAME PR
     batch["items"].append(cand(99, PAPER, "paper"))
@@ -213,6 +263,9 @@ def test_spike_sends_everything_to_review_even_if_confident(fake, tmp_path):
     batch["items"] = [cand(100 + i, SURE) for i in range(200)]   # e.g. a name collision
     r = run(cfg, work, scratch=tmp_path / "b", api=api, today=D)
     assert r.counts["spike"] and r.counts["accepted"] == 0
+    md = show(work, "whouses/review", "data/review/REVIEW.md")      # repos: file, link and the matching code in a fence
+    assert "**Found in:** x.py ([open](https://github.com/o/r100/blob/abc/x.py))" in md
+    assert "```\nimport mypkg\nmypkg.go()\n```" in md
     assert api.created == 1 and "name collision" in api.prs[1]["body"]
 
 
