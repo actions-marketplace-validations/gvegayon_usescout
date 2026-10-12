@@ -17,7 +17,8 @@ def collect(ctx: Context) -> list[Candidate]:
                "X-GitHub-Api-Version": "2022-11-28"}
     own = (ctx.cfg.repo or "").lower()
     excluded = ctx.cfg.owner_excludes
-    seen: dict[str, Candidate] = {}
+    frags: dict[str, dict[str, str]] = {}      # repo -> {path: fragment}
+    meta: dict[str, Candidate] = {}
     for q in ctx.profile.get("code", {}).get("search_queries", []):
         for page in range(1, MAX_PAGES + 1):
             r = ctx.http.get(API, params={"q": q, "per_page": 100, "page": page}, headers=headers)
@@ -31,16 +32,20 @@ def collect(ctx: Context) -> list[Candidate]:
                 full = repo["full_name"]
                 if repo.get("fork") or full.lower() == own or repo["owner"]["login"].lower() in excluded:
                     continue
+                key = full.lower()
+                meta.setdefault(key, Candidate(
+                    source="github", kind="repo", ref_id=full, url=repo["html_url"], title=full,
+                    owner=repo["owner"]["login"]))
                 frag = " ".join(m.get("fragment", "") for m in it.get("text_matches", []))
-                cand = seen.get(full.lower())
-                if cand is None:
-                    seen[full.lower()] = Candidate(
-                        source="github", kind="repo", ref_id=full, url=repo["html_url"], title=full,
-                        owner=repo["owner"]["login"], snippet=frag[:600],
-                        extra={"path": it.get("path", "")})
-                elif frag and frag not in cand.snippet and len(cand.snippet) < 600:
-                    cand.snippet = (cand.snippet + " … " + frag)[:600]
+                frags.setdefault(key, {}).setdefault(it.get("path", ""), frag)
             ctx.http.sleep(6.5)  # stay under the code-search rate limit
             if len(items) < 100:
                 break
+    # Search returns files in a different order from run to run; sort by path so the evidence is stable.
+    seen: dict[str, Candidate] = {}
+    for key, cand in meta.items():
+        by_path = sorted(frags.get(key, {}).items())
+        cand.snippet = " … ".join(f for _, f in by_path if f)[:600]
+        cand.extra = {"path": by_path[0][0] if by_path else ""}
+        seen[key] = cand
     return list(seen.values())

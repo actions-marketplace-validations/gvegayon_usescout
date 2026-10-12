@@ -40,6 +40,8 @@ class Store:
             old = cur.get(f.id)
             if old:
                 f.first_seen = old.first_seen
+                if old.usage_class == f.usage_class:   # same verdict: keep the original evidence, don't churn the file
+                    f.snippet, f.rationale = old.snippet, old.rationale
             else:
                 added += 1
             f.last_seen = today if old is None else max(old.last_seen, today)

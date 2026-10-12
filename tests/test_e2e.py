@@ -178,6 +178,7 @@ def test_closed_pr_rejects_and_unchanged_run_makes_no_commit(fake, tmp_path):
     run(cfg, work, scratch=tmp_path / "b", **kw)
     assert len(rows(work, "whouses-data", "data/rejected.jsonl")) == 3 and api.created == 1
     head = git("rev-parse", "origin/whouses-data", cwd=work)
+    batch["items"][0].snippet = SURE + "\n# search returned the fragments in another order"   # same verdict
     run(cfg, work, scratch=tmp_path / "c", **kw)
     git("fetch", "-q", "origin", cwd=work)
     assert git("rev-parse", "origin/whouses-data", cwd=work) == head
