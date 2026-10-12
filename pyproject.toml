@@ -1,6 +1,6 @@
 [project]
 name = "whouses"
-version = "0.1.1"
+version = "0.1.2"
 description = "Track who uses your research software: code hosts, registries and literature."
 readme = "README.md"
 requires-python = ">=3.11"
