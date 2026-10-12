@@ -54,6 +54,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
   pypi:
+    # opt-in: set the repository variable PUBLISH_PYPI=true after configuring trusted publishing on PyPI
+    if: ${{ vars.PUBLISH_PYPI == 'true' }}
     runs-on: ubuntu-latest
     environment: pypi
     steps:
